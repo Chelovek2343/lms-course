@@ -1,26 +1,111 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --background: #ffffff;
+    --foreground: #171717;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+    :root {
+        --background: #0a0a0a;
+        --foreground: #ededed;
+    }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ===== МОБИЛЬНАЯ АДАПТАЦИЯ ===== */
+
+/* Планшеты (768px - 1024px) */
+@media (max-width: 1024px) {
+    .desktop-nav {
+        gap: 20px !important;
+    }
+}
+
+/* Мобильные (до 768px) */
+@media (max-width: 768px) {
+    .desktop-nav {
+        display: none !important;
+    }
+
+    .burger-btn {
+        display: flex !important;
+    }
+
+    /* Hero секция */
+    .hero-section {
+        padding: 100px 20px 60px !important;
+    }
+
+    .hero-buttons {
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    .hero-buttons a,
+    .hero-buttons button {
+        width: 100% !important;
+        text-align: center !important;
+    }
+
+    .hero-stats {
+        gap: 20px !important;
+    }
+
+    /* Секции */
+    .section-padding {
+        padding: 60px 20px !important;
+    }
+
+    /* О компании */
+    .about-grid {
+        grid-template-columns: 1fr !important;
+        gap: 40px !important;
+    }
+
+    /* Цены */
+    .pricing-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Отзывы */
+    .reviews-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Footer */
+    .footer {
+        flex-direction: column !important;
+        text-align: center !important;
+        gap: 16px !important;
+    }
+
+    /* Навбар */
+    nav {
+        padding: 14px 20px !important;
+    }
+}
+
+/* Маленькие телефоны (до 390px) */
+@media (max-width: 390px) {
+    .hero-stats {
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+
+    .pricing-card {
+        padding: 24px 20px !important;
+    }
 }
