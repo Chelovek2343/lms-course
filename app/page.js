@@ -238,7 +238,7 @@ footer a{color:var(--muted);text-decoration:none}
 footer a:hover{color:var(--ink)}
 
 /* dialog */
-dialog{border:1px solid var(--line);border-radius:24px;padding:0;background:#071d40;color:var(--ink);width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto}
+dialog{border:1px solid var(--line);border-radius:24px;padding:0;background:#071d40;color:var(--ink); margin: 0 auto;width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto}
 dialog::backdrop{background:rgba(2,8,20,.72);backdrop-filter:blur(3px)}
 dialog[open]{animation:dlg .22s ease-out}
 @keyframes dlg{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
