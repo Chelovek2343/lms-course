@@ -627,7 +627,7 @@ export default function HomePage() {
     if (CONFIG.whatsapp) {
       var wa = document.createElement("a");
       wa.className = "btn"; wa.target = "_blank"; wa.rel = "noopener";
-      wa.href = "https://wa.me/" + CONFIG.whatsapp.replace(/\D/g, "") + "?text=Привет" + enc;
+      wa.href = "https://wa.me/" + CONFIG.whatsapp.replace(/\D/g, "") + "?text=" + enc;
       wa.textContent = "Написать в WhatsApp";
       row.appendChild(wa);
     }
