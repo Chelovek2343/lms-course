@@ -622,7 +622,7 @@ export default function HomePage() {
     var it = intents[kind] || intents.consult;
     currentText = it.msg(roleWord[role]);
     document.getElementById("dlg-title").textContent = it.title;
-    document.getElementById("dlg-msg").textContent = currentText;
+    // document.getElementById("dlg-msg").textContent = currentText;
     var row = document.getElementById("dlg-row");
     row.textContent = "";
     var enc = encodeURIComponent(currentText);
