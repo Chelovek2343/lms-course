@@ -585,7 +585,6 @@ const PAGE_HTML = `
     <button class="close" type="button" aria-label="Закрыть" id="dlg-close">×</button>
     <h3 id="dlg-title"></h3>
     <p class="lead">Выберите, где удобнее. Сообщение уже подготовлено, останется его отправить.</p>
-    <div class="msg" id="dlg-msg"></div>
     <div class="row" id="dlg-row"></div>
     <button class="copy" type="button" id="dlg-copy">Скопировать сообщение</button>
   </div>
