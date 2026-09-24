@@ -286,7 +286,6 @@ const PAGE_HTML = `
       <a href="#faq">Вопросы</a>
     </nav>
     <div style="display:flex;gap:10px;align-items:center">
-      <a class="btn btn-sm btn-ghost" href="/login">Войти</a>
       <button class="btn btn-sm" data-cta="consult" type="button">Заявка</button>
     </div>
   </div>
