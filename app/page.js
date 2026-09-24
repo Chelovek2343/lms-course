@@ -585,7 +585,6 @@ const PAGE_HTML = `
     <h3 id="dlg-title"></h3>
     <p class="lead">Выберите, где удобнее. Сообщение уже подготовлено, останется его отправить.</p>
     <div class="row" id="dlg-row"></div>
-    <button class="copy" type="button" id="dlg-copy">Скопировать сообщение</button>
   </div>
 </dialog>
 `;
