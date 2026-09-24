@@ -644,7 +644,6 @@ export default function HomePage() {
       p.textContent = "Скопируйте сообщение и отправьте его нам в любом мессенджере.";
       row.appendChild(p);
     }
-    document.getElementById("dlg-copy").textContent = "Скопировать сообщение";
     if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
   }
 
@@ -653,18 +652,6 @@ export default function HomePage() {
   });
   document.getElementById("dlg-close").addEventListener("click", function(){ dlg.close(); });
   dlg.addEventListener("click", function(e){ if (e.target === dlg) dlg.close(); });
-  document.getElementById("dlg-copy").addEventListener("click", function(){
-    var b = this;
-    function done(){ b.textContent = "Скопировано"; }
-    try {
-      navigator.clipboard.writeText(currentText).then(done, function(){});
-    } catch (e) {
-      var ta = document.createElement("textarea");
-      ta.value = currentText; document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); done(); } catch (e2) {}
-      document.body.removeChild(ta);
-    }
-  });
 
   /* цена в сомах */
   if (CONFIG.priceSomNote) document.getElementById("som").textContent = "· " + CONFIG.priceSomNote;
