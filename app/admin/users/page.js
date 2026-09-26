@@ -23,7 +23,7 @@ export default function AdminUsersPage() {
                 .eq('id', user.id)
                 .single();
 
-            if (!profile || !['admin', 'superuser'].includes(profile.role)) {
+            if (!profile || !['admin', 'superuser', 'owner'].includes(profile.role)) {
                 router.push('/dashboard');
                 return;
             }
