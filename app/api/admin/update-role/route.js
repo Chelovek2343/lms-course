@@ -14,7 +14,7 @@ export async function POST(request) {
             return Response.json({ error: 'Недопустимая роль' }, { status: 400 })
         }
 
-        const supabase = createRouteClient()
+        const supabase = await createRouteClient()
         const { data: { user: caller } } = await supabase.auth.getUser()
         if (!caller) {
             return Response.json({ error: 'Не авторизован' }, { status: 401 })
