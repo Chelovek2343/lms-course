@@ -57,6 +57,19 @@ export default function DashboardPage() {
             </div>
         );
 
+    const isStaff = ['admin', 'superuser'].includes(profile.role);
+
+    const roleBadge = () => {
+        if (profile.role === 'superuser') {
+            return { bg: 'rgba(239,68,68,0.1)', border: '#ef4444', color: '#ef4444', label: '👑 Superuser' };
+        }
+        if (profile.role === 'admin') {
+            return { bg: 'rgba(245,158,11,0.1)', border: '#f59e0b', color: '#f59e0b', label: '⚙️ Admin' };
+        }
+        return { bg: 'rgba(0,229,255,0.1)', border: '#00e5ff', color: '#00e5ff', label: '🎓 Student' };
+    };
+    const badge = roleBadge();
+
     return (
         <div
             style={{
@@ -102,23 +115,15 @@ export default function DashboardPage() {
                         <span
                             style={{
                                 padding: '6px 14px',
-                                background:
-                                    profile.role === 'admin'
-                                        ? 'rgba(245,158,11,0.1)'
-                                        : 'rgba(0,229,255,0.1)',
-                                border: `1px solid ${profile.role === 'admin' ? '#f59e0b' : '#00e5ff'}`,
+                                background: badge.bg,
+                                border: `1px solid ${badge.border}`,
                                 borderRadius: '6px',
-                                color:
-                                    profile.role === 'admin'
-                                        ? '#f59e0b'
-                                        : '#00e5ff',
+                                color: badge.color,
                                 fontSize: '12px',
                                 fontWeight: '600',
                             }}
                         >
-                            {profile.role === 'admin'
-                                ? '⚙️ Admin'
-                                : '🎓 Student'}
+                            {badge.label}
                         </span>
                         <button
                             onClick={handleLogout}
@@ -137,7 +142,7 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                {profile.role === 'admin' && (
+                {isStaff && (
                     <div
                         style={{
                             background: 'rgba(245,158,11,0.05)',
@@ -192,6 +197,21 @@ export default function DashboardPage() {
                                 }}
                             >
                                 ⚙️ Админ панель
+                            </button>
+                            <button
+                                onClick={() => router.push('/admin/users')}
+                                style={{
+                                    padding: '10px 16px',
+                                    background: 'rgba(239,68,68,0.1)',
+                                    border: '1px solid rgba(239,68,68,0.3)',
+                                    borderRadius: '8px',
+                                    color: '#ef4444',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: '600',
+                                }}
+                            >
+                                👥 Пользователи
                             </button>
                         </div>
                     </div>
