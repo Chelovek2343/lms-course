@@ -84,11 +84,12 @@ loadUsers(profile.role);
     };
 
     const canManage = (u) => {
-        if (u.role === 'superuser') return false;
-        if (u.id === me?.id) return false;
-        if (me?.role === 'admin' && u.role === 'admin') return false;
-        return true;
-    };
+    if (u.id === me?.id) return false;
+    if (u.role === 'owner') return false;
+    if (u.role === 'superuser' && me?.role !== 'owner') return false;
+    if (me?.role === 'admin' && ['admin', 'superuser'].includes(u.role)) return false;
+    return true;
+};
 
     if (loading || !me) {
         return (
