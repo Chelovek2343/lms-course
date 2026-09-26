@@ -22,9 +22,9 @@ export async function POST(request) {
             .eq('id', caller.id)
             .single()
 
-        if (!callerProfile || !['admin', 'superuser'].includes(callerProfile.role)) {
-            return Response.json({ error: 'Недостаточно прав' }, { status: 403 })
-        }
+       if (!callerProfile || !['admin', 'superuser', 'owner'].includes(callerProfile.role)) {
+    return Response.json({ error: 'Недостаточно прав' }, { status: 403 })
+}
 
         if (userId === caller.id) {
             return Response.json({ error: 'Нельзя удалить самого себя' }, { status: 400 })
