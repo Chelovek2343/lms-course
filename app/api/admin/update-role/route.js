@@ -26,7 +26,7 @@ export async function POST(request) {
             .eq('id', caller.id)
             .single()
 
-        if (!callerProfile || !['admin', 'superuser'].includes(callerProfile.role)) {
+        if (!callerProfile || !['admin', 'superuser', 'owner'].includes(callerProfile.role)) {
             return Response.json({ error: 'Недостаточно прав' }, { status: 403 })
         }
 
