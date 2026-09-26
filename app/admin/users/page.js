@@ -34,15 +34,20 @@ export default function AdminUsersPage() {
         init();
     }, []);
 
-    const loadUsers = async () => {
-        const { data } = await supabase
-            .from('profiles')
-            .select('*')
-            .not('role', 'in', '(superuser,owner)')
-            .order('created_at', { ascending: false });
-        setUsers(data || []);
-        setLoading(false);
-    };
+    const loadUsers = async (viewerRole) => {
+    let query = supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (viewerRole !== 'owner') {
+        query = query.not('role', 'in', '(superuser,owner)');
+    }
+
+    const { data } = await query;
+    setUsers(data || []);
+    setLoading(false);
+};
 
     const toggleAdmin = async (u) => {
         const newRole = u.role === 'admin' ? 'student' : 'admin';
