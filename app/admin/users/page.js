@@ -29,7 +29,7 @@ export default function AdminUsersPage() {
             }
 
             setMe(profile);
-            loadUsers();
+loadUsers(profile.role);
         };
         init();
     }, []);
