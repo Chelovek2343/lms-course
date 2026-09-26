@@ -184,21 +184,6 @@ export default function DashboardPage() {
                                 📚 Управление курсами
                             </button>
                             <button
-                                onClick={() => router.push('/admin')}
-                                style={{
-                                    padding: '10px 16px',
-                                    background: 'rgba(0,229,255,0.1)',
-                                    border: '1px solid rgba(0,229,255,0.3)',
-                                    borderRadius: '8px',
-                                    color: '#00e5ff',
-                                    cursor: 'pointer',
-                                    fontSize: '13px',
-                                    fontWeight: '600',
-                                }}
-                            >
-                                ⚙️ Админ панель
-                            </button>
-                            <button
                                 onClick={() => router.push('/admin/users')}
                                 style={{
                                     padding: '10px 16px',
