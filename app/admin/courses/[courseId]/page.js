@@ -33,7 +33,7 @@ export default function CourseEditorPage() {
                 .eq('id', user.id)
                 .single();
 
-           if (!['admin', 'superuser'].includes(profile?.role)) {
+           if (!['admin', 'superuser', 'owner'].includes(profile?.role)) {
     router.push('/dashboard');
     return;
 }
