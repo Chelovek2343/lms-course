@@ -57,17 +57,20 @@ export default function DashboardPage() {
             </div>
         );
 
-    const isStaff = ['admin', 'superuser'].includes(profile.role);
+  const isStaff = ['admin', 'superuser', 'owner'].includes(profile.role);
 
-    const roleBadge = () => {
-        if (profile.role === 'superuser') {
-            return { bg: 'rgba(239,68,68,0.1)', border: '#ef4444', color: '#ef4444', label: '👑 Superuser' };
-        }
-        if (profile.role === 'admin') {
-            return { bg: 'rgba(245,158,11,0.1)', border: '#f59e0b', color: '#f59e0b', label: '⚙️ Admin' };
-        }
-        return { bg: 'rgba(0,229,255,0.1)', border: '#00e5ff', color: '#00e5ff', label: '🎓 Student' };
-    };
+const roleBadge = () => {
+    if (profile.role === 'owner') {
+        return { bg: 'rgba(168,85,247,0.1)', border: '#a855f7', color: '#a855f7', label: '🔱 Owner' };
+    }
+    if (profile.role === 'superuser') {
+        return { bg: 'rgba(239,68,68,0.1)', border: '#ef4444', color: '#ef4444', label: '👑 Superuser' };
+    }
+    if (profile.role === 'admin') {
+        return { bg: 'rgba(245,158,11,0.1)', border: '#f59e0b', color: '#f59e0b', label: '⚙️ Admin' };
+    }
+    return { bg: 'rgba(0,229,255,0.1)', border: '#00e5ff', color: '#00e5ff', label: '🎓 Student' };
+};
     const badge = roleBadge();
 
     return (
