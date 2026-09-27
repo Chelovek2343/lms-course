@@ -29,25 +29,25 @@ export default function AdminUsersPage() {
             }
 
             setMe(profile);
-loadUsers(profile.role);
+            loadUsers(profile.role);
         };
         init();
     }, []);
 
     const loadUsers = async (viewerRole) => {
-    let query = supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+        let query = supabase
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-    if (viewerRole !== 'owner') {
-        query = query.not('role', 'in', '(superuser,owner)');
-    }
+        if (viewerRole !== 'owner') {
+            query = query.not('role', 'in', '(superuser,owner)');
+        }
 
-    const { data } = await query;
-    setUsers(data || []);
-    setLoading(false);
-};
+        const { data } = await query;
+        setUsers(data || []);
+        setLoading(false);
+    };
 
     const toggleAdmin = async (u) => {
         const newRole = u.role === 'admin' ? 'student' : 'admin';
@@ -59,12 +59,12 @@ loadUsers(profile.role);
         });
         const result = await res.json();
         if (!res.ok) alert(result.error || 'Ошибка');
-        await loadUsers();
+        await loadUsers(me?.role);
         setActingOn(null);
     };
 
     const deleteUser = async (u) => {
-        if (!confirm(`Удалить пользователя ${u.email}?`)) return;
+        if (!confirm(`Удалить пользователя ${displayName(u)}?`)) return;
         setActingOn(u.id);
         const res = await fetch('/api/admin/delete-user', {
             method: 'POST',
@@ -73,23 +73,27 @@ loadUsers(profile.role);
         });
         const result = await res.json();
         if (!res.ok) alert(result.error || 'Ошибка');
-        await loadUsers();
+        await loadUsers(me?.role);
         setActingOn(null);
     };
 
     const roleLabel = (role) => {
+        if (role === 'owner') return '🔱 Owner';
         if (role === 'superuser') return '👑 Superuser';
         if (role === 'admin') return '⚙️ Admin';
         return '🎓 Student';
     };
 
+    // студентам показываем логин, остальным — настоящий email
+    const displayName = (u) => u.login || u.email;
+
     const canManage = (u) => {
-    if (u.id === me?.id) return false;
-    if (u.role === 'owner') return false;
-    if (u.role === 'superuser' && me?.role !== 'owner') return false;
-    if (me?.role === 'admin' && ['admin', 'superuser'].includes(u.role)) return false;
-    return true;
-};
+        if (u.id === me?.id) return false;
+        if (u.role === 'owner') return false;
+        if (u.role === 'superuser' && me?.role !== 'owner') return false;
+        if (me?.role === 'admin' && ['admin', 'superuser'].includes(u.role)) return false;
+        return true;
+    };
 
     if (loading || !me) {
         return (
@@ -107,16 +111,21 @@ loadUsers(profile.role);
                         <h1 style={{ color: '#fff', fontSize: 'clamp(18px,4vw,24px)', marginBottom: '4px' }}>👥 Пользователи</h1>
                         <p style={{ color: '#64748b', fontSize: '13px' }}>Управление ролями и доступом</p>
                     </div>
-                    <button onClick={() => router.push('/dashboard')} style={{ padding: '8px 14px', background: 'transparent', border: '1px solid #1e2433', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '13px' }}>
-                        ← Dashboard
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        <button onClick={() => router.push('/admin/users/create')} style={{ padding: '8px 14px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', color: '#10b981', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+                            + Создать аккаунт
+                        </button>
+                        <button onClick={() => router.push('/dashboard')} style={{ padding: '8px 14px', background: 'transparent', border: '1px solid #1e2433', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '13px' }}>
+                            ← Dashboard
+                        </button>
+                    </div>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {users.map((u) => (
                         <div key={u.id} style={{ background: '#111827', border: '1px solid #1e2433', borderRadius: '12px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                             <div>
-                                <p style={{ color: '#fff', fontSize: '14px', marginBottom: '4px' }}>{u.email}</p>
+                                <p style={{ color: '#fff', fontSize: '14px', marginBottom: '4px' }}>{displayName(u)}</p>
                                 <span style={{ color: '#64748b', fontSize: '12px' }}>{roleLabel(u.role)}</span>
                             </div>
 
@@ -148,10 +157,13 @@ loadUsers(profile.role);
                                         </button>
                                     </>
                                 )}
-                                {u.role === 'superuser' && (
+                                {u.role === 'owner' && (
                                     <span style={{ color: '#64748b', fontSize: '11px' }}>Защищённый аккаунт</span>
                                 )}
-                                {u.id === me.id && u.role !== 'superuser' && (
+                                {u.role === 'superuser' && me?.role !== 'owner' && (
+                                    <span style={{ color: '#64748b', fontSize: '11px' }}>Защищённый аккаунт</span>
+                                )}
+                                {u.id === me.id && !['owner', 'superuser'].includes(u.role) && (
                                     <span style={{ color: '#64748b', fontSize: '11px' }}>Это вы</span>
                                 )}
                             </div>
