@@ -26,13 +26,22 @@ export default function CreateUserPage() {
         setLoading(false);
     };
 
-    const copyCreds = () => {
-        const text = `Логин: ${result.login}\nПароль: ${result.password}`;
-        navigator.clipboard.writeText(text).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        });
-    };
+    const login = result?.login ?? '';
+const password = result?.password ?? '';
+
+const copyCreds = async () => {
+    if (!login || !password) return;
+
+    try {
+        const text = `Логин: ${login}\nПароль: ${password}`;
+        await navigator.clipboard.writeText(text);
+
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    } catch {
+        setError('Не удалось скопировать. Скопируйте данные вручную.');
+    }
+};
 
     return (
         <div style={{ minHeight: '100vh', background: '#0a0e1a', fontFamily: 'monospace', padding: '20px' }}>
