@@ -24,7 +24,7 @@ export async function POST(request) {
         const { data, error } = await supabaseAdmin
             .from('profiles')
             .select('email')
-            .eq('login', value)
+            .eq('login', value.toLowerCase())
             .maybeSingle()
 
         if (error || !data) {
