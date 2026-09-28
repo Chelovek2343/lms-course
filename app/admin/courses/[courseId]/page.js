@@ -197,6 +197,108 @@ const addLesson = async () => {
         loadData();
     };
 
+    const handlePresentationUpload = async (lessonId, kind, file) => {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+        alert('Загрузите презентацию в формате PDF');
+        return;
+    }
+    setUploadingPres(`${lessonId}:${kind}`);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fileName: file.name,
+                fileType: file.type,
+                lessonId,
+            }),
+        });
+        const { signedUrl, key } = await res.json();
+
+        const put = await fetch(signedUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type },
+            body: file,
+        });
+        if (!put.ok) throw new Error('Не удалось загрузить файл');
+
+        const { error } = await supabase
+            .from('lessons')
+            .update({
+                [`presentation_${kind}_key`]: key,
+                [`presentation_${kind}_name`]: file.name,
+            })
+            .eq('id', lessonId);
+        if (error) throw error;
+
+        loadData();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+    setUploadingPres(null);
+};
+
+const removePresentation = async (lessonId, kind) => {
+    if (!confirm('Убрать презентацию из урока?')) return;
+    const { error } = await supabase
+        .from('lessons')
+        .update({
+            [`presentation_${kind}_key`]: null,
+            [`presentation_${kind}_name`]: null,
+        })
+        .eq('id', lessonId);
+    if (error) alert('Ошибка: ' + error.message);
+    loadData();
+};
+
+const presentationSlot = (lesson, kind, label) => {
+    const key = lesson[`presentation_${kind}_key`];
+    const name = lesson[`presentation_${kind}_name`];
+    const busy = uploadingPres === `${lesson.id}:${kind}`;
+
+    return (
+        <div style={{ marginTop: '10px' }}>
+            <label style={{ color: '#64748b', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
+                {label}
+            </label>
+            {key && (
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '8px 10px', background: '#0a0e1a', border: '1px solid #1e2433',
+                    borderRadius: '6px', marginBottom: '6px', flexWrap: 'wrap', gap: '6px'
+                }}>
+                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>📊 {name || 'Презентация'}</span>
+                    <button onClick={() => removePresentation(lesson.id, kind)} style={{
+                        padding: '4px 8px', background: 'rgba(239,68,68,0.1)',
+                        border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px',
+                        color: '#ef4444', cursor: 'pointer', fontSize: '11px'
+                    }}>
+                        Убрать
+                    </button>
+                </div>
+            )}
+            <label style={{
+                display: 'inline-block', padding: '6px 12px',
+                background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+                borderRadius: '6px', color: '#10b981', fontSize: '11px',
+                cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1
+            }}>
+                {busy ? 'Загрузка...' : key ? '📊 Заменить PDF' : '📊 Загрузить PDF'}
+                <input
+                    type="file" accept="application/pdf" style={{ display: 'none' }}
+                    disabled={busy}
+                    onChange={e => {
+                        handlePresentationUpload(lesson.id, kind, e.target.files[0]);
+                        e.target.value = '';
+                    }}
+                />
+            </label>
+        </div>
+    );
+};
+
     const inputStyle = {
         padding: '10px 12px',
         background: '#0a0e1a',
