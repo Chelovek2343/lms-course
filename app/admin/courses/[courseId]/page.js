@@ -13,9 +13,11 @@ export default function CourseEditorPage() {
     const [newLesson, setNewLesson] = useState({ title: '', sectionId: '' });
     const [uploadingLesson, setUploadingLesson] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadingPres, setUploadingPres] = useState(null);
     const router = useRouter();
     const { courseId } = useParams();
     const supabase = createClient();
+    
 
     useEffect(() => {
         const init = async () => {
