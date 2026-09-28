@@ -528,58 +528,6 @@ const presentationSlot = (lesson, kind, label) => {
                 </div>
 
                 {/* Файлы */}
-  //               <div style={{ marginTop: '10px' }}>
-  //                 <label style={{ color: '#64748b', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
-  //                   ПРИКРЕПЛЁННЫЕ ФАЙЛЫ
-  //                 </label>
-  //                 {lesson.lesson_files?.map(f => (
-  //                   <div key={f.id} style={{
-  //                     display: 'flex', justifyContent: 'space-between',
-  //                     alignItems: 'center', padding: '8px 10px',
-  //                     background: '#0a0e1a', border: '1px solid #1e2433',
-  //                     borderRadius: '6px', marginBottom: '6px', flexWrap: 'wrap', gap: '6px'
-  //                   }}>
-  //                     <span style={{ color: '#94a3b8', fontSize: '12px' }}>📎 {f.name}</span>
-  //                     <span style={{ color: '#374151', fontSize: '11px' }}>
-  //                       {(f.file_size / 1024).toFixed(0)} KB
-  //                     </span>
-  //                   </div>
-  //                 ))}
-  //                 <label style={{
-  //                   display: 'inline-block', marginTop: '4px', padding: '6px 12px',
-  //                   background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
-  //                   borderRadius: '6px', color: '#10b981', cursor: 'pointer', fontSize: '11px'
-  //                 }}>
-  //                   📎 Прикрепить файл
-  //                   <input
-  //                     type="file" style={{ display: 'none' }}
-  //                     onChange={e => handleFileUpload(lesson.id, e.target.files[0])}
-  //                   />
-  //                 </label>
-  //               </div>
-  //             </div>
-  //           ))}
-
-  //           {lessons.filter(l => l.section_id === section.id).length === 0 && (
-  //             <p style={{ color: '#64748b', fontSize: '12px', padding: '10px' }}>
-  //               Уроков пока нет
-  //             </p>
-  //           )}
-  //         </div>
-  //       </div>
-  //     ))}
-
-  //     {sections.length === 0 && (
-  //       <div style={{
-  //         background: '#111827', border: '1px solid #1e2433',
-  //         borderRadius: '12px', padding: '40px 20px', textAlign: 'center'
-  //       }}>
-  //         <p style={{ color: '#64748b', fontSize: '14px' }}>Секций пока нет — создай первую!</p>
-  //       </div>
-  //     )}
-
-  //   </div>
-  // </div>
 
 {presentationSlot(lesson, 'desktop', '🖥 ПРЕЗЕНТАЦИЯ ДЛЯ ПК')}
 {presentationSlot(lesson, 'mobile', '📱 ПРЕЗЕНТАЦИЯ ДЛЯ ТЕЛЕФОНА')}
