@@ -9,6 +9,8 @@ export default function LessonPage() {
     const [course, setCourse] = useState(null);
     const [user, setUser] = useState(null);
     const [videoUrl, setVideoUrl] = useState(null);
+    const [presUrl, setPresUrl] = useState(null);
+const [isMobile, setIsMobile] = useState(false);
     const videoRef = useRef(null);
     const playerRef = useRef(null);
     const router = useRouter();
@@ -95,6 +97,39 @@ export default function LessonPage() {
             }
         };
     }, [videoUrl]);
+
+    useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    setIsMobile(mq.matches);
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+}, []);
+
+useEffect(() => {
+    if (!lesson) return;
+    const key = isMobile
+        ? lesson.presentation_mobile_key || lesson.presentation_desktop_key
+        : lesson.presentation_desktop_key || lesson.presentation_mobile_key;
+
+    if (!key) {
+        setPresUrl(null);
+        return;
+    }
+
+    let cancelled = false;
+    (async () => {
+        const res = await fetch('/api/video-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key }),
+        });
+        const { url } = await res.json();
+        if (!cancelled) setPresUrl(url);
+    })();
+
+    return () => { cancelled = true; };
+}, [lesson, isMobile]);
 
     const markComplete = async () => {
         await supabase.from('progress').upsert(
@@ -257,6 +292,37 @@ export default function LessonPage() {
                         </p>
                     </div>
                 )}
+
+{presUrl && (
+    <div style={{
+        background: '#111827', border: '1px solid #1e2433',
+        borderRadius: '12px', padding: '20px', marginBottom: '16px'
+    }}>
+        <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px'
+        }}>
+            <h2 style={{ color: '#fff', fontSize: '15px', margin: 0 }}>📊 Презентация</h2>
+            <button
+                onClick={() => window.open(presUrl, '_blank')}
+                style={{
+                    padding: '6px 12px', background: 'rgba(0,229,255,0.1)',
+                    border: '1px solid rgba(0,229,255,0.3)', borderRadius: '6px',
+                    color: '#00e5ff', cursor: 'pointer', fontSize: '12px'
+                }}
+            >
+                Открыть на весь экран
+            </button>
+        </div>
+        <iframe
+            src={`${presUrl}#toolbar=0`}
+            style={{
+                width: '100%', height: isMobile ? '70vh' : '80vh',
+                border: 'none', borderRadius: '8px', background: '#fff'
+            }}
+        />
+    </div>
+)}
 
                 {/* Файлы урока */}
                 {lesson.lesson_files?.length > 0 && (
