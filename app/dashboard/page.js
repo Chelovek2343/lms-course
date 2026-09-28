@@ -128,6 +128,20 @@ const roleBadge = () => {
                         >
                             {badge.label}
                         </span>
+                            <button
+    onClick={() => router.push('/profile')}
+    style={{
+        padding: '8px 16px',
+        background: 'transparent',
+        border: '1px solid #1e2433',
+        borderRadius: '8px',
+        color: '#fff',
+        cursor: 'pointer',
+        fontSize: '13px',
+    }}
+>
+    👤 Профиль
+</button>
                         <button
                             onClick={handleLogout}
                             style={{
