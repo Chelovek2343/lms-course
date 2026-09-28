@@ -68,28 +68,36 @@ export default function CourseEditorPage() {
     };
 
     const addSection = async () => {
-        if (!newSectionTitle.trim()) return;
-        await supabase.from('sections').insert({
-            course_id: courseId,
-            title: newSectionTitle,
-            order_index: sections.length + 1,
-        });
-        setNewSectionTitle('');
-        loadData();
-    };
+    if (!newSectionTitle.trim()) return;
+    const { error } = await supabase.from('sections').insert({
+        course_id: courseId,
+        title: newSectionTitle,
+        order_index: sections.length + 1,
+    });
+    if (error) {
+        alert('Ошибка: ' + error.message);
+        return;
+    }
+    setNewSectionTitle('');
+    loadData();
+};
 
-    const addLesson = async () => {
-        if (!newLesson.title.trim() || !newLesson.sectionId) return;
-        await supabase.from('lessons').insert({
-            section_id: newLesson.sectionId,
-            title: newLesson.title,
-            order_index:
-                lessons.filter((l) => l.section_id === newLesson.sectionId)
-                    .length + 1,
-        });
-        setNewLesson({ title: '', sectionId: '' });
-        loadData();
-    };
+const addLesson = async () => {
+    if (!newLesson.title.trim() || !newLesson.sectionId) return;
+    const { error } = await supabase.from('lessons').insert({
+        section_id: newLesson.sectionId,
+        title: newLesson.title,
+        order_index:
+            lessons.filter((l) => l.section_id === newLesson.sectionId)
+                .length + 1,
+    });
+    if (error) {
+        alert('Ошибка: ' + error.message);
+        return;
+    }
+    setNewLesson({ title: '', sectionId: '' });
+    loadData();
+};
 
     const deleteLesson = async (id) => {
         await supabase.from('lessons').delete().eq('id', id);
