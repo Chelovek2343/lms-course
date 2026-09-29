@@ -167,6 +167,7 @@ export default function LessonPage() {
     const [videoUrl, setVideoUrl] = useState(null);
     const [presUrl, setPresUrl] = useState(null);
 const [isMobile, setIsMobile] = useState(false);
+    const [isTouch, setIsTouch] = useState(false);
     const videoRef = useRef(null);
     const playerRef = useRef(null);
     const router = useRouter();
@@ -254,15 +255,17 @@ const [isMobile, setIsMobile] = useState(false);
         };
     }, [videoUrl]);
 
-    useEffect(() => {
+   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)');
     setIsMobile(mq.matches);
+    setIsTouch(window.matchMedia('(pointer: coarse)').matches);
     const handler = (e) => setIsMobile(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
 }, []);
 
 useEffect(() => {
+    const showCanvasPdf = isMobile || isTouch;
     if (!lesson) return;
     const key = isMobile
         ? lesson.presentation_mobile_key || lesson.presentation_desktop_key
@@ -450,33 +453,60 @@ useEffect(() => {
                 )}
 
 {presUrl && (
-    <div style={{
-        background: '#111827', border: '1px solid #1e2433',
-        borderRadius: '12px', padding: '20px', marginBottom: '16px'
-    }}>
-        <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px'
-        }}>
-            <h2 style={{ color: '#fff', fontSize: '15px', margin: 0 }}>📊 Презентация</h2>
-            <button
-                onClick={() => window.open(presUrl, '_blank')}
-                style={{
-                    padding: '6px 12px', background: 'rgba(0,229,255,0.1)',
-                    border: '1px solid rgba(0,229,255,0.3)', borderRadius: '6px',
-                    color: '#00e5ff', cursor: 'pointer', fontSize: '12px'
-                }}
-            >
-                Открыть на весь экран
-            </button>
-        </div>
-        <iframe
-            src={`${presUrl}#toolbar=0`}
+    <div
+        style={{
+            background: '#111827',
+            border: '1px solid #1e2433',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '16px',
+        }}
+    >
+        <div
             style={{
-                width: '100%', height: isMobile ? '70vh' : '80vh',
-                border: 'none', borderRadius: '8px', background: '#fff'
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '12px',
+                flexWrap: 'wrap',
+                gap: '8px',
             }}
-        />
+        >
+            <h2 style={{ color: '#fff', fontSize: '15px', margin: 0 }}>
+                📊 Презентация
+            </h2>
+            {!showCanvasPdf && (
+                <button
+                    onClick={() => window.open(presUrl, '_blank')}
+                    style={{
+                        padding: '6px 12px',
+                        background: 'rgba(0,229,255,0.1)',
+                        border: '1px solid rgba(0,229,255,0.3)',
+                        borderRadius: '6px',
+                        color: '#00e5ff',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                    }}
+                >
+                    Открыть на весь экран
+                </button>
+            )}
+        </div>
+
+        {showCanvasPdf ? (
+            <PdfViewer url={presUrl} />
+        ) : (
+            <iframe
+                src={`${presUrl}#toolbar=0`}
+                style={{
+                    width: '100%',
+                    height: '80vh',
+                    border: 'none',
+                    borderRadius: '8px',
+                    background: '#fff',
+                }}
+            />
+        )}
     </div>
 )}
 
