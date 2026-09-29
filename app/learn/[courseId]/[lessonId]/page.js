@@ -264,8 +264,9 @@ const [isMobile, setIsMobile] = useState(false);
     return () => mq.removeEventListener('change', handler);
 }, []);
 
-useEffect(() => {
     const showCanvasPdf = isMobile || isTouch;
+
+useEffect(() => {
     if (!lesson) return;
     const key = isMobile
         ? lesson.presentation_mobile_key || lesson.presentation_desktop_key
