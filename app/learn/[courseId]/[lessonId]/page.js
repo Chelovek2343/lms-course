@@ -78,7 +78,6 @@ function PdfViewer({ url }) {
                     }
                 };
 
-                // освобождаем память у страниц, которые далеко от экрана
                 const clearPage = (wrap) => {
                     const n = Number(wrap.dataset.page);
                     if (rendering.has(n) || wrap.dataset.done !== '1') return;
@@ -166,8 +165,9 @@ export default function LessonPage() {
     const [user, setUser] = useState(null);
     const [videoUrl, setVideoUrl] = useState(null);
     const [presUrl, setPresUrl] = useState(null);
-const [isMobile, setIsMobile] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
     const [isTouch, setIsTouch] = useState(false);
+    const [activeTab, setActiveTab] = useState('notes');
     const videoRef = useRef(null);
     const playerRef = useRef(null);
     const router = useRouter();
@@ -185,7 +185,6 @@ const [isMobile, setIsMobile] = useState(false);
             }
             setUser(user);
 
-            // Проверяем запись на курс
             const { data: enrollment } = await supabase
                 .from('enrollments')
                 .select('id')
@@ -212,8 +211,8 @@ const [isMobile, setIsMobile] = useState(false);
 
             setLesson(lesson);
             setCourse(course);
+            setActiveTab('notes');
 
-            // Получаем подписанный URL для видео
             if (lesson?.hls_key) {
                 const res = await fetch('/api/video-url', {
                     method: 'POST',
@@ -255,41 +254,39 @@ const [isMobile, setIsMobile] = useState(false);
         };
     }, [videoUrl]);
 
-   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)');
-    setIsMobile(mq.matches);
-    setIsTouch(window.matchMedia('(pointer: coarse)').matches);
-    const handler = (e) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-}, []);
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 768px)');
+        setIsMobile(mq.matches);
+        setIsTouch(window.matchMedia('(pointer: coarse)').matches);
+        const handler = (e) => setIsMobile(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+    }, []);
 
-    const showCanvasPdf = isMobile || isTouch;
+    useEffect(() => {
+        if (!lesson) return;
+        const key = isMobile
+            ? lesson.presentation_mobile_key || lesson.presentation_desktop_key
+            : lesson.presentation_desktop_key || lesson.presentation_mobile_key;
 
-useEffect(() => {
-    if (!lesson) return;
-    const key = isMobile
-        ? lesson.presentation_mobile_key || lesson.presentation_desktop_key
-        : lesson.presentation_desktop_key || lesson.presentation_mobile_key;
+        if (!key) {
+            setPresUrl(null);
+            return;
+        }
 
-    if (!key) {
-        setPresUrl(null);
-        return;
-    }
+        let cancelled = false;
+        (async () => {
+            const res = await fetch('/api/video-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key }),
+            });
+            const { url } = await res.json();
+            if (!cancelled) setPresUrl(url);
+        })();
 
-    let cancelled = false;
-    (async () => {
-        const res = await fetch('/api/video-url', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key }),
-        });
-        const { url } = await res.json();
-        if (!cancelled) setPresUrl(url);
-    })();
-
-    return () => { cancelled = true; };
-}, [lesson, isMobile]);
+        return () => { cancelled = true; };
+    }, [lesson, isMobile]);
 
     const markComplete = async () => {
         await supabase.from('progress').upsert(
@@ -304,6 +301,8 @@ useEffect(() => {
 
         router.push(`/learn/${courseId}`);
     };
+
+    const showCanvasPdf = isMobile || isTouch;
 
     if (!lesson)
         return (
@@ -321,6 +320,28 @@ useEffect(() => {
                 </p>
             </div>
         );
+
+    const hasFiles = lesson.lesson_files?.length > 0;
+
+    const tabs = [
+        { id: 'notes', label: '📝 Конспект' },
+        ...(presUrl ? [{ id: 'presentation', label: '📊 Презентация' }] : []),
+        ...(hasFiles ? [{ id: 'files', label: '📎 Файлы' }] : []),
+    ];
+
+    const tabStyle = (id) => ({
+        padding: '10px 4px',
+        marginRight: '22px',
+        background: 'transparent',
+        border: 'none',
+        borderBottom: activeTab === id ? '2px solid #00e5ff' : '2px solid transparent',
+        color: activeTab === id ? '#00e5ff' : '#64748b',
+        cursor: 'pointer',
+        fontSize: '13px',
+        fontWeight: activeTab === id ? '600' : '400',
+        fontFamily: 'monospace',
+        whiteSpace: 'nowrap',
+    });
 
     return (
         <div
@@ -420,117 +441,117 @@ useEffect(() => {
                     )}
                 </div>
 
-                {/* Текст урока */}
-                {lesson.content && (
+                {/* Вкладки */}
+                {tabs.length > 0 && (
                     <div
                         style={{
-                            background: '#111827',
-                            border: '1px solid #1e2433',
-                            borderRadius: '12px',
-                            padding: '20px',
-                            marginBottom: '16px',
+                            display: 'flex',
+                            overflowX: 'auto',
+                            borderBottom: '1px solid #1e2433',
+                            marginBottom: '20px',
                         }}
                     >
-                        <h2
-                            style={{
-                                color: '#fff',
-                                fontSize: '15px',
-                                marginBottom: '12px',
-                            }}
-                        >
-                            📝 Материал урока
-                        </h2>
-                        <p
-                            style={{
-                                color: '#94a3b8',
-                                fontSize: '14px',
-                                lineHeight: '1.8',
-                                userSelect: 'none',
-                            }}
-                        >
-                            {lesson.content}
-                        </p>
+                        {tabs.map((t) => (
+                            <button
+                                key={t.id}
+                                onClick={() => setActiveTab(t.id)}
+                                style={tabStyle(t.id)}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
                     </div>
                 )}
 
-{presUrl && (
-    <div
-        style={{
-            background: '#111827',
-            border: '1px solid #1e2433',
-            borderRadius: '12px',
-            padding: '20px',
-            marginBottom: '16px',
-        }}
-    >
-        <div
-            style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '12px',
-                flexWrap: 'wrap',
-                gap: '8px',
-            }}
-        >
-            <h2 style={{ color: '#fff', fontSize: '15px', margin: 0 }}>
-                📊 Презентация
-            </h2>
-            {!showCanvasPdf && (
-                <button
-                    onClick={() => window.open(presUrl, '_blank')}
-                    style={{
-                        padding: '6px 12px',
-                        background: 'rgba(0,229,255,0.1)',
-                        border: '1px solid rgba(0,229,255,0.3)',
-                        borderRadius: '6px',
-                        color: '#00e5ff',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                    }}
-                >
-                    Открыть на весь экран
-                </button>
-            )}
-        </div>
-
-        {showCanvasPdf ? (
-            <PdfViewer url={presUrl} />
-        ) : (
-            <iframe
-                src={`${presUrl}#toolbar=0`}
-                style={{
-                    width: '100%',
-                    height: '80vh',
-                    border: 'none',
-                    borderRadius: '8px',
-                    background: '#fff',
-                }}
-            />
-        )}
-    </div>
-)}
-
-                {/* Файлы урока */}
-                {lesson.lesson_files?.length > 0 && (
+                {/* Контент вкладки: Конспект */}
+                {activeTab === 'notes' && (
                     <div
                         style={{
                             background: '#111827',
                             border: '1px solid #1e2433',
                             borderRadius: '12px',
                             padding: '20px',
-                            marginBottom: '16px',
+                            marginBottom: '20px',
                         }}
                     >
-                        <h2
-                            style={{
-                                color: '#fff',
-                                fontSize: '15px',
-                                marginBottom: '12px',
-                            }}
-                        >
-                            📎 Файлы урока
-                        </h2>
+                        {lesson.content ? (
+                            <p
+                                style={{
+                                    color: '#94a3b8',
+                                    fontSize: '14px',
+                                    lineHeight: '1.8',
+                                    userSelect: 'none',
+                                    whiteSpace: 'pre-wrap',
+                                }}
+                            >
+                                {lesson.content}
+                            </p>
+                        ) : (
+                            <p style={{ color: '#64748b', fontSize: '14px' }}>
+                                Конспект для этого урока ещё не добавлен
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {/* Контент вкладки: Презентация */}
+                {activeTab === 'presentation' && presUrl && (
+                    <div
+                        style={{
+                            background: '#111827',
+                            border: '1px solid #1e2433',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            marginBottom: '20px',
+                        }}
+                    >
+                        {!showCanvasPdf && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                                <button
+                                    onClick={() => window.open(presUrl, '_blank')}
+                                    style={{
+                                        padding: '6px 12px',
+                                        background: 'rgba(0,229,255,0.1)',
+                                        border: '1px solid rgba(0,229,255,0.3)',
+                                        borderRadius: '6px',
+                                        color: '#00e5ff',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                    }}
+                                >
+                                    Открыть на весь экран
+                                </button>
+                            </div>
+                        )}
+
+                        {showCanvasPdf ? (
+                            <PdfViewer url={presUrl} />
+                        ) : (
+                            <iframe
+                                src={`${presUrl}#toolbar=0`}
+                                style={{
+                                    width: '100%',
+                                    height: '80vh',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    background: '#fff',
+                                }}
+                            />
+                        )}
+                    </div>
+                )}
+
+                {/* Контент вкладки: Файлы */}
+                {activeTab === 'files' && hasFiles && (
+                    <div
+                        style={{
+                            background: '#111827',
+                            border: '1px solid #1e2433',
+                            borderRadius: '12px',
+                            padding: '20px',
+                            marginBottom: '20px',
+                        }}
+                    >
                         {lesson.lesson_files.map((f) => (
                             <div
                                 key={f.id}
@@ -547,29 +568,16 @@ useEffect(() => {
                                     marginBottom: '8px',
                                 }}
                             >
-                                <span
-                                    style={{
-                                        color: '#94a3b8',
-                                        fontSize: '13px',
-                                    }}
-                                >
+                                <span style={{ color: '#94a3b8', fontSize: '13px' }}>
                                     📎 {f.name}
                                 </span>
                                 <button
                                     onClick={async () => {
-                                        const res = await fetch(
-                                            '/api/video-url',
-                                            {
-                                                method: 'POST',
-                                                headers: {
-                                                    'Content-Type':
-                                                        'application/json',
-                                                },
-                                                body: JSON.stringify({
-                                                    key: f.file_key,
-                                                }),
-                                            },
-                                        );
+                                        const res = await fetch('/api/video-url', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ key: f.file_key }),
+                                        });
                                         const { url } = await res.json();
                                         window.open(url, '_blank');
                                     }}
