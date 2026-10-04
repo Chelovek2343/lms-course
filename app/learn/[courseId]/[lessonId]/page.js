@@ -352,6 +352,15 @@ export default function LessonPage() {
                 padding: '20px',
             }}
         >
+
+                        <style>{`
+    .lesson-rich h2 { color: #00e5ff; font-size: 18px; margin: 16px 0 8px; font-family: monospace; }
+    .lesson-rich h3 { color: #7c3aed; font-size: 15px; margin: 14px 0 6px; font-family: monospace; }
+    .lesson-rich p { margin: 0 0 10px; }
+    .lesson-rich ul, .lesson-rich ol { margin: 0 0 10px 20px; padding: 0; }
+    .lesson-rich li { margin-bottom: 4px; }
+    .lesson-rich strong { color: #fff; }
+`}</style>
             <div style={{ maxWidth: '900px', margin: '0 auto' }}>
                 <button
                     onClick={() => router.push(`/learn/${courseId}`)}
@@ -475,18 +484,17 @@ export default function LessonPage() {
                         }}
                     >
                         {lesson.content ? (
-                            <p
-                                style={{
-                                    color: '#94a3b8',
-                                    fontSize: '14px',
-                                    lineHeight: '1.8',
-                                    userSelect: 'none',
-                                    whiteSpace: 'pre-wrap',
-                                }}
-                            >
-                                {lesson.content}
-                            </p>
-                        ) : (
+    <div
+        className="lesson-rich"
+        style={{
+            color: '#94a3b8',
+            fontSize: '14px',
+            lineHeight: '1.8',
+            userSelect: 'none',
+        }}
+        dangerouslySetInnerHTML={{ __html: lesson.content }}
+    />
+) : (
                             <p style={{ color: '#64748b', fontSize: '14px' }}>
                                 Конспект для этого урока ещё не добавлен
                             </p>
