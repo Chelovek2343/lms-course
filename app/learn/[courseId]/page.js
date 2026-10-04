@@ -135,6 +135,16 @@ export default function LearnPage() {
                 padding: '20px',
             }}
         >
+
+            <style>{`
+    .lesson-rich h2 { color: #00e5ff; font-size: 18px; margin: 16px 0 8px; font-family: monospace; }
+    .lesson-rich h3 { color: #7c3aed; font-size: 15px; margin: 14px 0 6px; font-family: monospace; }
+    .lesson-rich p { margin: 0 0 10px; }
+    .lesson-rich ul, .lesson-rich ol { margin: 0 0 10px 20px; padding: 0; }
+    .lesson-rich li { margin-bottom: 4px; }
+    .lesson-rich strong { color: #fff; }
+`}</style>
+            
             <div style={{ maxWidth: '800px', margin: '0 auto' }}>
                 <button
                     onClick={() => router.push('/courses')}
