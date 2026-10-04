@@ -1,8 +1,71 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createClient } from '../../../../lib/supabase';
 import { useRouter, useParams } from 'next/navigation';
+
+function RichTextEditor({ value, onSave }) {
+    const ref = useRef(null);
+    const initialized = useRef(false);
+
+    useEffect(() => {
+        if (ref.current && !initialized.current) {
+            ref.current.innerHTML = value || '';
+            initialized.current = true;
+        }
+    }, [value]);
+
+    const exec = (cmd, val = null) => {
+        ref.current?.focus();
+        document.execCommand(cmd, false, val);
+    };
+
+    const btn = {
+        padding: '6px 10px',
+        background: '#0a0e1a',
+        border: '1px solid #1e2433',
+        borderRadius: '6px',
+        color: '#94a3b8',
+        cursor: 'pointer',
+        fontSize: '12px',
+        marginRight: '6px',
+        marginBottom: '6px',
+    };
+
+    return (
+        <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('formatBlock', 'H2')} style={btn}>H2</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('formatBlock', 'H3')} style={btn}>H3</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('bold')} style={{ ...btn, fontWeight: '700' }}>Ж</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('italic')} style={{ ...btn, fontStyle: 'italic' }}>К</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('insertUnorderedList')} style={btn}>• Список</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('insertOrderedList')} style={btn}>1. Список</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('formatBlock', 'P')} style={btn}>Обычный текст</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('removeFormat')} style={btn}>Очистить</button>
+            </div>
+            <div
+                ref={ref}
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={() => onSave(ref.current.innerHTML)}
+                className="lesson-rich"
+                style={{
+                    width: '100%',
+                    minHeight: '120px',
+                    padding: '10px',
+                    background: '#0a0e1a',
+                    border: '1px solid #1e2433',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    fontSize: '13px',
+                    lineHeight: '1.6',
+                    boxSizing: 'border-box',
+                }}
+            />
+        </div>
+    );
+}
 
 export default function CourseEditorPage() {
     const [profile, setProfile] = useState(null);
@@ -330,6 +393,18 @@ export default function CourseEditorPage() {
                     justifyContent: 'center',
                 }}
             >
+
+                    return (
+        <div style={{ minHeight: '100vh', background: '#0a0e1a', fontFamily: 'monospace', padding: '20px' }}>
+            <style>{`
+                .lesson-rich h2 { color: #00e5ff; font-size: 18px; margin: 16px 0 8px; font-family: monospace; }
+                .lesson-rich h3 { color: #7c3aed; font-size: 15px; margin: 14px 0 6px; font-family: monospace; }
+                .lesson-rich p { margin: 0 0 10px; }
+                .lesson-rich ul, .lesson-rich ol { margin: 0 0 10px 20px; padding: 0; }
+                .lesson-rich li { margin-bottom: 4px; }
+                .lesson-rich strong { color: #fff; }
+            `}</style>
+            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
                 <p style={{ color: '#64748b', fontFamily: 'monospace' }}>
                     Загрузка...
                 </p>
@@ -508,21 +583,14 @@ export default function CourseEditorPage() {
                                     )}
 
                                     {/* Текст урока */}
+                                                                        {/* Текст урока */}
                                     <div style={{ marginTop: '12px' }}>
                                         <label style={{ color: '#64748b', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
                                             ТЕКСТ УРОКА
                                         </label>
-                                        <textarea
-                                            defaultValue={lesson.content || ''}
-                                            rows={3}
-                                            placeholder="Введи текст урока..."
-                                            onBlur={e => saveContent(lesson.id, e.target.value)}
-                                            style={{
-                                                width: '100%', padding: '10px',
-                                                background: '#0a0e1a', border: '1px solid #1e2433',
-                                                borderRadius: '6px', color: '#fff', fontSize: '13px',
-                                                boxSizing: 'border-box', resize: 'vertical'
-                                            }}
+                                        <RichTextEditor
+                                            value={lesson.content || ''}
+                                            onSave={(html) => saveContent(lesson.id, html)}
                                         />
                                     </div>
 
