@@ -396,14 +396,6 @@ export default function CourseEditorPage() {
 
                     return (
         <div style={{ minHeight: '100vh', background: '#0a0e1a', fontFamily: 'monospace', padding: '20px' }}>
-            <style>{`
-                .lesson-rich h2 { color: #00e5ff; font-size: 18px; margin: 16px 0 8px; font-family: monospace; }
-                .lesson-rich h3 { color: #7c3aed; font-size: 15px; margin: 14px 0 6px; font-family: monospace; }
-                .lesson-rich p { margin: 0 0 10px; }
-                .lesson-rich ul, .lesson-rich ol { margin: 0 0 10px 20px; padding: 0; }
-                .lesson-rich li { margin-bottom: 4px; }
-                .lesson-rich strong { color: #fff; }
-            `}</style>
             <div style={{ maxWidth: '900px', margin: '0 auto' }}>
                 <p style={{ color: '#64748b', fontFamily: 'monospace' }}>
                     Загрузка...
@@ -413,6 +405,14 @@ export default function CourseEditorPage() {
 
     return (
         <div style={{ minHeight: '100vh', background: '#0a0e1a', fontFamily: 'monospace', padding: '20px' }}>
+        <style>{`
+                .lesson-rich h2 { color: #00e5ff; font-size: 18px; margin: 16px 0 8px; font-family: monospace; }
+                .lesson-rich h3 { color: #7c3aed; font-size: 15px; margin: 14px 0 6px; font-family: monospace; }
+                .lesson-rich p { margin: 0 0 10px; }
+                .lesson-rich ul, .lesson-rich ol { margin: 0 0 10px 20px; padding: 0; }
+                .lesson-rich li { margin-bottom: 4px; }
+                .lesson-rich strong { color: #fff; }
+            `}</style>
             <div style={{ maxWidth: '900px', margin: '0 auto' }}>
 
                 <div style={{
