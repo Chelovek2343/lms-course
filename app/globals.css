@@ -1,5 +1,38 @@
 @import 'tailwindcss';
 
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --bg: #011a37;
+  --bg-raised: #0a2547;
+  --card-bg: #072a52;
+  --accent: #ffffff;
+  --accent-dark: #d7e4f7;
+  --accent-soft: #6fa3e0;
+  --accent-glow: rgba(255,255,255,0.14);
+  --text: #f4f7fb;
+  --text-muted: #9db0cc;
+  --text-faint: #5c7194;
+  --border: #163863;
+  --border-soft: #0c2547;
+  --input-bg: #0a2245;
+  --input-focus: #0e2c56;
+  --serif: 'Fraunces', Georgia, serif;
+  --sans: 'Inter', sans-serif;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  margin: 0;
+  padding: 0;
+}
+
+a { color: inherit; }
+
 :root {
     --background: #ffffff;
     --foreground: #171717;
