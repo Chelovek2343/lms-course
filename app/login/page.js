@@ -92,6 +92,7 @@ export default function LoginPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)' }}>
       {/* Шапка */}
+          {/* Шапка */}
       <header
         style={{
           position: 'sticky',
@@ -104,6 +105,8 @@ export default function LoginPage() {
       >
         <div
           style={{
+            maxWidth: '460px',
+            margin: '0 auto',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
