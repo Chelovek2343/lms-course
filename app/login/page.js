@@ -83,10 +83,6 @@ export default function LoginPage() {
     color: 'var(--text)',
     marginBottom: '8px',
   }
-
-  const stats = [
-    { title: '1 оплата', desc: 'Неограниченно вузов и стран' },
-    { title: 'Личный куратор', desc: 'Рядом на каждом шаге подачи' },
   ]
 
   return (
@@ -114,23 +110,6 @@ export default function LoginPage() {
           }}
         >
           <Logo height={28} maxWidth={150} />
-          <a
-            href="https://batconsultingg-bit.github.io/batconsulting/#form"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              background: 'var(--accent)',
-              color: 'var(--bg)',
-              fontWeight: '700',
-              fontSize: '13.5px',
-              padding: '10px 20px',
-              borderRadius: '999px',
-              textDecoration: 'none',
-              flexShrink: 0,
-            }}
-          >
-            Заявка
-          </a>
         </div>
       </header>
 
@@ -346,13 +325,6 @@ export default function LoginPage() {
               >
                 Не помню пароль
               </button>
-              <a
-                href="#"
-                onClick={(e) => e.preventDefault()}
-                style={{ color: 'var(--accent-soft)', fontSize: '14px', textDecoration: 'none' }}
-              >
-                Пример кабинета →
-              </a>
             </div>
 
             <div style={{ height: '1px', background: 'var(--border-soft)', margin: '40px 0 4px' }} />
