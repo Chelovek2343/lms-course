@@ -64,71 +64,95 @@ export default function LoginPage() {
 
   const inputStyle = {
     width: '100%',
-    padding: '13px 14px',
-    paddingRight: '44px',
+    padding: '15px 16px',
+    paddingRight: '46px',
     background: 'var(--input-bg)',
-    border: '1.5px solid var(--border)',
-    borderRadius: '10px',
+    border: '1.5px solid rgba(111,163,224,0.25)',
+    borderRadius: '14px',
     color: 'var(--text)',
-    fontSize: '14.5px',
+    fontSize: '15px',
     fontFamily: 'var(--sans)',
-    fontWeight: '500',
     boxSizing: 'border-box',
     outline: 'none',
   }
 
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '28px',
-        padding: '24px',
-        background: 'var(--bg)',
-        backgroundImage:
-          'radial-gradient(ellipse 60% 40% at 15% 0%, rgba(111,163,224,0.14) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 30%, rgba(255,255,255,0.05) 0%, transparent 60%)',
-        fontFamily: 'var(--sans)',
-      }}
-    >
-      <Logo height={40} maxWidth={220} />
+  const labelStyle = {
+    display: 'block',
+    fontSize: '13px',
+    fontWeight: '700',
+    color: 'var(--text)',
+    marginBottom: '8px',
+  }
 
-      <div
+  const stats = [
+    { title: '1 оплата', desc: 'Неограниченно вузов и стран' },
+    { title: 'Личный куратор', desc: 'Рядом на каждом шаге подачи' },
+  ]
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)' }}>
+      {/* Шапка */}
+      <header
         style={{
-          background: 'var(--card-bg)',
-          border: '1px solid var(--border)',
-          borderRadius: '20px',
-          padding: '36px 32px 40px',
-          width: '100%',
-          maxWidth: '400px',
-          boxShadow:
-            '0 0 0 1px rgba(255,255,255,0.03), 0 24px 60px rgba(0,0,0,0.45), 0 0 80px var(--accent-glow)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          background: 'rgba(10,10,10,0.86)',
+          backdropFilter: 'blur(10px)',
+          borderBottom: '1px solid var(--border-soft)',
         }}
       >
-        <h1
+        <div
           style={{
-            fontFamily: 'var(--serif)',
-            fontWeight: '600',
-            fontSize: '24px',
-            color: 'var(--text)',
-            marginBottom: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '14px 20px',
           }}
         >
-          Личный кабинет
-        </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '13.5px', marginBottom: '26px' }}>
-          Платформа обучения BAT Consulting
-        </p>
+          <Logo height={28} maxWidth={150} />
+          <a
+            href="https://batconsultingg-bit.github.io/batconsulting/#form"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              background: 'var(--accent)',
+              color: 'var(--bg)',
+              fontWeight: '700',
+              fontSize: '13.5px',
+              padding: '10px 20px',
+              borderRadius: '999px',
+              textDecoration: 'none',
+              flexShrink: 0,
+            }}
+          >
+            Заявка
+          </a>
+        </div>
+      </header>
 
+      {/* Контент */}
+      <div style={{ maxWidth: '460px', margin: '0 auto', padding: '36px 20px 60px' }}>
         {forgotMode ? (
           <div>
-            <h2 style={{ fontFamily: 'var(--serif)', fontWeight: '600', color: 'var(--text)', fontSize: '18px', marginBottom: '8px' }}>
-              Восстановление пароля
-            </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px', lineHeight: '1.6' }}>
-              Доступно только для аккаунтов с привязанным email. Если вы студент и входите по логину, обратитесь к администратору.
+            <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '13px', marginBottom: '14px' }}>
+              Восстановление доступа
+            </p>
+            <h1
+              style={{
+                fontFamily: 'var(--serif)',
+                fontWeight: '800',
+                fontSize: 'clamp(30px, 8vw, 38px)',
+                lineHeight: '1.1',
+                letterSpacing: '-0.5px',
+                color: 'var(--text)',
+                marginBottom: '16px',
+              }}
+            >
+              Забыли пароль?
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '15px', lineHeight: '1.6', marginBottom: '28px' }}>
+              Доступно только для аккаунтов с привязанным email. Если вы входите по логину, выданному куратором, обратитесь к нему для сброса пароля.
             </p>
 
             {forgotSent ? (
@@ -136,10 +160,10 @@ export default function LoginPage() {
                 style={{
                   background: 'rgba(111,163,224,0.1)',
                   border: '1px solid rgba(111,163,224,0.3)',
-                  borderRadius: '10px',
-                  padding: '16px',
+                  borderRadius: '14px',
+                  padding: '18px',
                   textAlign: 'center',
-                  marginBottom: '12px',
+                  marginBottom: '16px',
                 }}
               >
                 <p style={{ color: 'var(--accent-soft)', fontSize: '14px' }}>
@@ -148,26 +172,27 @@ export default function LoginPage() {
               </div>
             ) : (
               <>
+                <label style={labelStyle}>Email</label>
                 <input
                   type="email"
-                  placeholder="Email"
+                  placeholder="you@example.com"
                   value={forgotEmail}
                   onChange={e => setForgotEmail(e.target.value)}
-                  style={{ ...inputStyle, marginBottom: '16px' }}
+                  style={{ ...inputStyle, marginBottom: '18px' }}
                 />
                 <button
                   onClick={handleForgotPassword}
                   disabled={loading}
                   style={{
                     width: '100%',
-                    padding: '14px',
-                    marginBottom: '12px',
+                    padding: '16px',
+                    marginBottom: '14px',
                     background: 'var(--accent)',
                     color: 'var(--bg)',
                     border: 'none',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    fontSize: '14.5px',
+                    borderRadius: '999px',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    fontSize: '15px',
                     fontWeight: '700',
                     fontFamily: 'var(--sans)',
                   }}
@@ -177,51 +202,85 @@ export default function LoginPage() {
               </>
             )}
 
+            {error && (
+              <p style={{ color: '#ff9b9b', fontSize: '13px', marginBottom: '14px' }}>{error}</p>
+            )}
+
             <button
-              onClick={() => { setForgotMode(false); setForgotSent(false); setForgotEmail('') }}
+              onClick={() => { setForgotMode(false); setForgotSent(false); setForgotEmail(''); setError('') }}
               style={{
-                width: '100%',
-                padding: '10px',
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                borderRadius: '10px',
+                background: 'none',
+                border: 'none',
                 color: 'var(--text-muted)',
                 cursor: 'pointer',
-                fontSize: '13px',
+                fontSize: '14px',
                 fontFamily: 'var(--sans)',
+                padding: 0,
               }}
             >
-              ← Назад
+              ← Назад ко входу
             </button>
           </div>
         ) : (
           <>
-            <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', color: 'var(--text)', marginBottom: '6px' }}>
-              Логин или email
-            </label>
+            <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '13px', marginBottom: '14px' }}>
+              С возвращением
+            </p>
+
+            <h1
+              style={{
+                fontFamily: 'var(--serif)',
+                fontWeight: '800',
+                fontSize: 'clamp(34px, 9vw, 46px)',
+                lineHeight: '1.08',
+                letterSpacing: '-1px',
+                color: 'var(--text)',
+                marginBottom: '18px',
+              }}
+            >
+              Войти{' '}
+              <em style={{ fontStyle: 'italic', color: 'var(--accent-soft)', fontWeight: '500' }}>
+                в кабинет
+              </em>
+            </h1>
+
+            <p
+              style={{
+                color: 'var(--text-muted)',
+                fontSize: '16px',
+                lineHeight: '1.65',
+                marginBottom: '34px',
+                maxWidth: '40ch',
+              }}
+            >
+              Используй данные, выданные куратором. Все уроки, материалы и задания — здесь.
+            </p>
+
+            <label style={labelStyle}>Логин или email</label>
             <input
               type="text"
+              placeholder="Ваш логин"
               value={identifier}
               onChange={e => setIdentifier(e.target.value)}
-              style={{ ...inputStyle, marginBottom: '14px' }}
+              style={{ ...inputStyle, marginBottom: '18px' }}
             />
 
-            <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', color: 'var(--text)', marginBottom: '6px' }}>
-              Пароль
-            </label>
-            <div style={{ position: 'relative' }}>
+            <label style={labelStyle}>Пароль</label>
+            <div style={{ position: 'relative', marginBottom: '8px' }}>
               <input
                 type={showPassword ? 'text' : 'password'}
+                placeholder="Пароль"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                style={{ ...inputStyle, marginBottom: '4px' }}
+                style={inputStyle}
               />
               <button
                 onClick={() => setShowPassword(!showPassword)}
                 style={{
                   position: 'absolute',
-                  right: '12px',
-                  top: '13px',
+                  right: '14px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
@@ -234,7 +293,7 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <p style={{ color: '#ff9b9b', marginTop: '10px', marginBottom: '6px', fontSize: '13px' }}>
+              <p style={{ color: '#ff9b9b', fontSize: '13px', marginTop: '8px', marginBottom: '8px' }}>
                 {error}
               </p>
             )}
@@ -244,38 +303,81 @@ export default function LoginPage() {
               disabled={loading}
               style={{
                 width: '100%',
-                padding: '14px',
+                padding: '17px',
                 marginTop: '20px',
                 background: 'var(--accent)',
                 color: 'var(--bg)',
                 border: 'none',
-                borderRadius: '12px',
+                borderRadius: '999px',
                 cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '14.5px',
+                fontSize: '15.5px',
                 fontWeight: '700',
                 fontFamily: 'var(--sans)',
-                boxShadow: '0 4px 20px rgba(255,255,255,0.2)',
+                boxShadow: '0 8px 28px rgba(255,255,255,0.15)',
               }}
             >
-              {loading ? 'Загрузка...' : 'Войти'}
+              {loading ? 'Загрузка...' : 'Войти в кабинет'}
             </button>
 
-            <button
-              onClick={() => setForgotMode(true)}
+            <div
               style={{
-                width: '100%',
-                padding: '10px',
-                marginTop: '10px',
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-faint)',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontFamily: 'var(--sans)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: '20px',
+                flexWrap: 'wrap',
+                gap: '10px',
               }}
             >
-              Забыл пароль?
-            </button>
+              <button
+                onClick={() => { setForgotMode(true); setError('') }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontFamily: 'var(--sans)',
+                  padding: 0,
+                }}
+              >
+                Не помню пароль
+              </button>
+              <a
+                href="#"
+                onClick={(e) => e.preventDefault()}
+                style={{ color: 'var(--accent-soft)', fontSize: '14px', textDecoration: 'none' }}
+              >
+                Пример кабинета →
+              </a>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--border-soft)', margin: '40px 0 4px' }} />
+
+            {stats.map((s, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: '22px 0',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)',
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: 'var(--serif)',
+                    fontWeight: '600',
+                    fontSize: '22px',
+                    color: 'var(--accent-soft)',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {s.title}
+                </p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '13.5px', lineHeight: '1.4' }}>
+                  {s.desc}
+                </p>
+              </div>
+            ))}
           </>
         )}
       </div>
