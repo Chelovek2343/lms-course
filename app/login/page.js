@@ -83,12 +83,10 @@ export default function LoginPage() {
     color: 'var(--text)',
     marginBottom: '8px',
   }
-  ]
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)' }}>
       {/* Шапка */}
-          {/* Шапка */}
       <header
         style={{
           position: 'sticky',
@@ -105,7 +103,6 @@ export default function LoginPage() {
             margin: '0 auto',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
             padding: '14px 20px',
           }}
         >
@@ -301,16 +298,7 @@ export default function LoginPage() {
               {loading ? 'Загрузка...' : 'Войти в кабинет'}
             </button>
 
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginTop: '20px',
-                flexWrap: 'wrap',
-                gap: '10px',
-              }}
-            >
+            <div style={{ marginTop: '20px' }}>
               <button
                 onClick={() => { setForgotMode(true); setError('') }}
                 style={{
@@ -326,36 +314,9 @@ export default function LoginPage() {
                 Не помню пароль
               </button>
             </div>
-
-            <div style={{ height: '1px', background: 'var(--border-soft)', margin: '40px 0 4px' }} />
-
-            {stats.map((s, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: '22px 0',
-                  borderTop: i === 0 ? 'none' : '1px solid var(--border-soft)',
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: 'var(--serif)',
-                    fontWeight: '600',
-                    fontSize: '22px',
-                    color: 'var(--accent-soft)',
-                    marginBottom: '4px',
-                  }}
-                >
-                  {s.title}
-                </p>
-                <p style={{ color: 'var(--text-muted)', fontSize: '13.5px', lineHeight: '1.4' }}>
-                  {s.desc}
-                </p>
-              </div>
-            ))}
           </>
         )}
       </div>
     </div>
   )
-}
+                      }                                     
