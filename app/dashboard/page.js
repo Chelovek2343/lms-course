@@ -5,11 +5,7 @@ import { createClient } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import Logo from '../../components/Logo';
 import BottomNav from '../../components/BottomNav';
-
-// Ссылка для кнопки «Написать куратору», например:
-// 'https://t.me/your_username' или 'https://wa.me/996555123456'
-// Если оставить пустой, кнопка не показывается.
-const CURATOR_LINK = 'https://t.me/ztzzzs';
+import { CURATOR_LINK } from '../../lib/config';
 
 const MAX_WIDTH = 720;
 
