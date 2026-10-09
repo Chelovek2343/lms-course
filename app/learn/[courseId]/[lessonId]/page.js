@@ -2,172 +2,54 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '../../../../lib/supabase';
+import { CURATOR_LINK } from '../../../../lib/config';
 import { useRouter, useParams } from 'next/navigation';
+import AppHeader from '../../../../components/AppHeader';
+import PdfViewer from '../../../../components/PdfViewer';
 
-const PDFJS_SRC =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-const PDFJS_WORKER =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const MAX_WIDTH = 720;
+const STAFF = ['admin', 'superuser', 'owner'];
 
-function PdfViewer({ url }) {
-    const containerRef = useRef(null);
-    const [status, setStatus] = useState('loading');
-
-    useEffect(() => {
-        let cancelled = false;
-        let pdfDoc = null;
-        let observer = null;
-
-        const loadPdfJs = () =>
-            new Promise((resolve, reject) => {
-                if (window.pdfjsLib) return resolve(window.pdfjsLib);
-                const s = document.createElement('script');
-                s.src = PDFJS_SRC;
-                s.onload = () => resolve(window.pdfjsLib);
-                s.onerror = () => reject(new Error('pdf.js не загрузился'));
-                document.head.appendChild(s);
-            });
-
-        const run = async () => {
-            try {
-                setStatus('loading');
-                const pdfjsLib = await loadPdfJs();
-                pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-
-                pdfDoc = await pdfjsLib.getDocument({
-                    url,
-                    disableRange: true,
-                    disableStream: true,
-                }).promise;
-                if (cancelled) return;
-
-                const container = containerRef.current;
-                if (!container) return;
-                container.innerHTML = '';
-
-                const first = await pdfDoc.getPage(1);
-                const base = first.getViewport({ scale: 1 });
-                const ratio = base.width / base.height;
-
-                const rendering = new Set();
-
-                const renderPage = async (wrap) => {
-                    const n = Number(wrap.dataset.page);
-                    if (wrap.dataset.done === '1' || rendering.has(n)) return;
-                    rendering.add(n);
-                    try {
-                        const page = await pdfDoc.getPage(n);
-                        const cssWidth = wrap.clientWidth || container.clientWidth;
-                        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-                        const vp0 = page.getViewport({ scale: 1 });
-                        const viewport = page.getViewport({
-                            scale: (cssWidth / vp0.width) * dpr,
-                        });
-                        const canvas = wrap.querySelector('canvas');
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-                        await page.render({
-                            canvasContext: canvas.getContext('2d'),
-                            viewport,
-                        }).promise;
-                        wrap.dataset.done = '1';
-                    } catch (e) {
-                        // отрисовку могли прервать при закрытии страницы
-                    } finally {
-                        rendering.delete(n);
-                    }
-                };
-
-                const clearPage = (wrap) => {
-                    const n = Number(wrap.dataset.page);
-                    if (rendering.has(n) || wrap.dataset.done !== '1') return;
-                    const canvas = wrap.querySelector('canvas');
-                    canvas.width = 1;
-                    canvas.height = 1;
-                    wrap.dataset.done = '0';
-                };
-
-                observer = new IntersectionObserver(
-                    (entries) => {
-                        entries.forEach((entry) => {
-                            if (entry.isIntersecting) renderPage(entry.target);
-                            else clearPage(entry.target);
-                        });
-                    },
-                    { rootMargin: '800px 0px' },
-                );
-
-                for (let n = 1; n <= pdfDoc.numPages; n++) {
-                    const wrap = document.createElement('div');
-                    wrap.dataset.page = String(n);
-                    wrap.dataset.done = '0';
-                    wrap.style.cssText = `width:100%;aspect-ratio:${ratio};margin-bottom:8px;background:#fff;border-radius:6px;overflow:hidden;`;
-                    const canvas = document.createElement('canvas');
-                    canvas.style.cssText =
-                        'width:100%;height:100%;display:block;object-fit:contain;';
-                    wrap.appendChild(canvas);
-                    container.appendChild(wrap);
-                    observer.observe(wrap);
-                }
-
-                setStatus('ready');
-            } catch (e) {
-                console.error('PDF error:', e);
-                if (!cancelled) setStatus('error');
-            }
-        };
-
-        run();
-
-        return () => {
-            cancelled = true;
-            if (observer) observer.disconnect();
-            if (pdfDoc) pdfDoc.destroy();
-        };
-    }, [url]);
-
-    return (
-        <div>
-            {status === 'loading' && (
-                <p style={{ color: '#64748b', fontSize: '13px', padding: '12px 0' }}>
-                    Загрузка презентации...
-                </p>
-            )}
-            {status === 'error' && (
-                <div style={{ padding: '12px 0' }}>
-                    <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '10px' }}>
-                        Не удалось показать презентацию.
-                    </p>
-                    <button
-                        onClick={() => window.open(url, '_blank')}
-                        style={{
-                            padding: '8px 14px',
-                            background: 'rgba(0,229,255,0.1)',
-                            border: '1px solid rgba(0,229,255,0.3)',
-                            borderRadius: '6px',
-                            color: '#00e5ff',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                        }}
-                    >
-                        Открыть в новой вкладке
-                    </button>
-                </div>
-            )}
-            <div ref={containerRef} />
-        </div>
-    );
-}
+const pillSolid = {
+    width: '100%',
+    padding: '16px',
+    borderRadius: '999px',
+    border: 'none',
+    background: 'var(--accent)',
+    color: 'var(--bg)',
+    fontSize: '15px',
+    fontWeight: '700',
+    fontFamily: 'var(--sans)',
+    cursor: 'pointer',
+};
+const pillOutline = {
+    width: '100%',
+    padding: '16px',
+    borderRadius: '999px',
+    border: '1.5px solid rgba(255,255,255,0.35)',
+    background: 'transparent',
+    color: 'var(--text)',
+    fontSize: '15px',
+    fontWeight: '700',
+    fontFamily: 'var(--sans)',
+    cursor: 'pointer',
+};
 
 export default function LessonPage() {
     const [lesson, setLesson] = useState(null);
     const [course, setCourse] = useState(null);
     const [user, setUser] = useState(null);
+    const [profile, setProfile] = useState(null);
     const [videoUrl, setVideoUrl] = useState(null);
     const [presUrl, setPresUrl] = useState(null);
     const [isMobile, setIsMobile] = useState(false);
     const [isTouch, setIsTouch] = useState(false);
     const [activeTab, setActiveTab] = useState('notes');
+    const [lessonNo, setLessonNo] = useState(1);
+    const [nextLessonId, setNextLessonId] = useState(null);
+    const [completed, setCompleted] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [notFound, setNotFound] = useState(false);
     const videoRef = useRef(null);
     const playerRef = useRef(null);
     const router = useRouter();
@@ -175,7 +57,16 @@ export default function LessonPage() {
     const supabase = createClient();
 
     useEffect(() => {
+        let cancelled = false;
+
         const init = async () => {
+            setLesson(null);
+            setVideoUrl(null);
+            setPresUrl(null);
+            setCompleted(false);
+            setNotFound(false);
+            setActiveTab('notes');
+
             const {
                 data: { user },
             } = await supabase.auth.getUser();
@@ -185,46 +76,86 @@ export default function LessonPage() {
             }
             setUser(user);
 
-            const { data: enrollment } = await supabase
-                .from('enrollments')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('course_id', courseId)
+            const { data: prof } = await supabase
+                .from('profiles')
+                .select('login, email, role')
+                .eq('id', user.id)
                 .single();
+            setProfile(prof);
 
-            if (!enrollment) {
-                router.push('/courses');
+            // студентам нужна запись на курс, персонал может смотреть всё
+            if (!STAFF.includes(prof?.role)) {
+                const { data: enrollment } = await supabase
+                    .from('enrollments')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('course_id', courseId)
+                    .maybeSingle();
+
+                if (!enrollment) {
+                    router.push('/courses');
+                    return;
+                }
+            }
+
+            const [lessonRes, courseRes, listRes, progRes] = await Promise.all([
+                supabase
+                    .from('lessons')
+                    .select('*, lesson_files(*)')
+                    .eq('id', lessonId)
+                    .single(),
+                supabase.from('courses').select('*').eq('id', courseId).single(),
+                supabase
+                    .from('lessons')
+                    .select('id, order_index, sections!inner(course_id, order_index)')
+                    .eq('sections.course_id', courseId),
+                supabase
+                    .from('progress')
+                    .select('completed')
+                    .eq('user_id', user.id)
+                    .eq('lesson_id', lessonId)
+                    .maybeSingle(),
+            ]);
+
+            if (cancelled) return;
+
+            const ordered = (listRes.data || [])
+                .map((l) => ({
+                    id: l.id,
+                    order: (l.sections?.order_index || 0) * 10000 + (l.order_index || 0),
+                }))
+                .sort((a, b) => a.order - b.order);
+
+            const idx = ordered.findIndex((l) => l.id === lessonId);
+
+            // урок должен принадлежать этому курсу
+            if (!lessonRes.data || idx === -1) {
+                setNotFound(true);
                 return;
             }
 
-            const { data: lesson } = await supabase
-                .from('lessons')
-                .select('*, lesson_files(*)')
-                .eq('id', lessonId)
-                .single();
+            setLessonNo(idx + 1);
+            setNextLessonId(ordered[idx + 1]?.id || null);
+            setCompleted(!!progRes.data?.completed);
+            setCourse(courseRes.data);
+            setLesson(lessonRes.data);
 
-            const { data: course } = await supabase
-                .from('courses')
-                .select('*')
-                .eq('id', courseId)
-                .single();
-
-            setLesson(lesson);
-            setCourse(course);
-            setActiveTab('notes');
-
-            if (lesson?.hls_key) {
+            if (lessonRes.data.hls_key) {
                 const res = await fetch('/api/video-url', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: lesson.hls_key }),
+                    body: JSON.stringify({ key: lessonRes.data.hls_key }),
                 });
-                const { url } = await res.json();
-                setVideoUrl(url);
+                const data = await res.json();
+                if (!cancelled && data.url) setVideoUrl(data.url);
             }
         };
+
         init();
-    }, [lessonId]);
+        return () => {
+            cancelled = true;
+        };
+    }, [lessonId, courseId]);
 
     useEffect(() => {
         if (!videoUrl || !videoRef.current) return;
@@ -239,7 +170,7 @@ export default function LessonPage() {
 
             playerRef.current = videojs(videoRef.current, {
                 controls: true,
-                fluid: true,
+                fill: true,
                 sources: [{ src: videoUrl, type: 'video/mp4' }],
             });
         };
@@ -281,15 +212,19 @@ export default function LessonPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ key }),
             });
-            const { url } = await res.json();
-            if (!cancelled) setPresUrl(url);
+            const data = await res.json();
+            if (!cancelled && data.url) setPresUrl(data.url);
         })();
 
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, [lesson, isMobile]);
 
     const markComplete = async () => {
-        await supabase.from('progress').upsert(
+        if (saving || completed) return;
+        setSaving(true);
+        const { error } = await supabase.from('progress').upsert(
             {
                 user_id: user.id,
                 lesson_id: lessonId,
@@ -298,240 +233,281 @@ export default function LessonPage() {
             },
             { onConflict: 'user_id,lesson_id' },
         );
+        setSaving(false);
+        if (error) {
+            alert('Ошибка: ' + error.message);
+            return;
+        }
+        setCompleted(true);
+    };
 
-        router.push(`/learn/${courseId}`);
+    const downloadFile = async (key) => {
+        const res = await fetch('/api/video-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key }),
+        });
+        const data = await res.json();
+        if (data.url) window.open(data.url, '_blank');
     };
 
     const showCanvasPdf = isMobile || isTouch;
+    const displayName = profile?.login || profile?.email || '?';
+    const initial = displayName.trim().charAt(0).toUpperCase();
+
+    if (notFound)
+        return (
+            <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)' }}>
+                <AppHeader initial={initial} maxWidth={MAX_WIDTH} />
+                <div style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '48px 20px' }}>
+                    <h1 style={{ fontFamily: 'var(--serif)', fontWeight: '700', fontSize: '30px', color: 'var(--text)', marginBottom: '12px' }}>
+                        Урок не найден
+                    </h1>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                        Возможно, он был удалён или ссылка неверная.
+                    </p>
+                    <button onClick={() => router.push(`/learn/${courseId}`)} style={{ ...pillOutline, width: 'auto', padding: '14px 26px' }}>
+                        К программе курса
+                    </button>
+                </div>
+            </div>
+        );
 
     if (!lesson)
         return (
             <div
                 style={{
                     minHeight: '100vh',
-                    background: '#0a0e1a',
+                    background: 'var(--bg)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}
             >
-                <p style={{ color: '#64748b', fontFamily: 'monospace' }}>
+                <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--sans)' }}>
                     Загрузка...
                 </p>
             </div>
         );
 
     const hasFiles = lesson.lesson_files?.length > 0;
-
     const tabs = [
-        { id: 'notes', label: '📝 Конспект' },
-        ...(presUrl ? [{ id: 'presentation', label: '📊 Презентация' }] : []),
-        ...(hasFiles ? [{ id: 'files', label: '📎 Файлы' }] : []),
+        { id: 'notes', label: 'Конспект' },
+        ...(presUrl ? [{ id: 'presentation', label: 'Презентация' }] : []),
+        ...(hasFiles ? [{ id: 'files', label: 'Файлы' }] : []),
     ];
 
-    const tabStyle = (id) => ({
-        padding: '10px 4px',
-        marginRight: '22px',
-        background: 'transparent',
-        border: 'none',
-        borderBottom: activeTab === id ? '2px solid #00e5ff' : '2px solid transparent',
-        color: activeTab === id ? '#00e5ff' : '#64748b',
-        cursor: 'pointer',
-        fontSize: '13px',
-        fontWeight: activeTab === id ? '600' : '400',
-        fontFamily: 'monospace',
-        whiteSpace: 'nowrap',
-    });
+    const words = (lesson.title || '').trim().split(/\s+/);
+    const titleHead = words.length > 1 ? words.slice(0, -1).join(' ') : '';
+    const titleTail = words[words.length - 1] || '';
 
     return (
-        <div
-            style={{
-                minHeight: '100vh',
-                background: '#0a0e1a',
-                fontFamily: 'monospace',
-                padding: '20px',
-            }}
-        >
+        <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)', paddingBottom: '60px' }}>
+            <style>{`
+                .lesson-rich { color: var(--text-muted); font-size: 16px; line-height: 1.75; user-select: none; }
+                .lesson-rich h2 { font-family: var(--serif); font-weight: 700; color: var(--text); font-size: 26px; line-height: 1.2; letter-spacing: -0.3px; margin: 0 0 12px; }
+                .lesson-rich h2:not(:first-child) { margin-top: 30px; }
+                .lesson-rich h3 { font-family: var(--serif); font-weight: 600; color: var(--text); font-size: 20px; margin: 24px 0 8px; }
+                .lesson-rich p { margin: 0 0 14px; }
+                .lesson-rich strong { color: var(--text); }
+                .lesson-rich em { color: var(--accent-soft); }
+                .lesson-rich ul, .lesson-rich ol { list-style: none; margin: 18px 0; padding: 0; border-top: 1px solid var(--border-soft); counter-reset: item; }
+                .lesson-rich li { position: relative; padding: 14px 0 14px 40px; border-bottom: 1px solid var(--border-soft); color: var(--text); counter-increment: item; }
+                .lesson-rich ol li::before { content: counter(item); position: absolute; left: 0; top: 14px; font-family: var(--serif); font-weight: 700; color: var(--accent-soft); }
+                .lesson-rich ul li::before { content: '•'; position: absolute; left: 6px; top: 14px; color: var(--accent-soft); }
+            `}</style>
 
-                        <style>{`
-    .lesson-rich h2 { color: #00e5ff; font-size: 18px; margin: 16px 0 8px; font-family: monospace; }
-    .lesson-rich h3 { color: #7c3aed; font-size: 15px; margin: 14px 0 6px; font-family: monospace; }
-    .lesson-rich p { margin: 0 0 10px; }
-    .lesson-rich ul, .lesson-rich ol { margin: 0 0 10px 20px; padding: 0; }
-    .lesson-rich li { margin-bottom: 4px; }
-    .lesson-rich strong { color: #fff; }
-`}</style>
-            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+            <AppHeader initial={initial} maxWidth={MAX_WIDTH} />
+
+            <main style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '26px 20px 0' }}>
                 <button
                     onClick={() => router.push(`/learn/${courseId}`)}
                     style={{
-                        padding: '8px 16px',
-                        background: 'transparent',
-                        border: '1px solid #1e2433',
-                        borderRadius: '6px',
-                        color: '#64748b',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: 'var(--accent-soft)',
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        fontFamily: 'var(--sans)',
                         cursor: 'pointer',
-                        fontSize: '13px',
-                        marginBottom: '20px',
+                        marginBottom: '26px',
                     }}
                 >
-                    ← Назад к курсу
+                    ← К программе курса
                 </button>
+
+                <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '14px', marginBottom: '10px' }}>
+                    Урок {String(lessonNo).padStart(2, '0')}
+                </p>
 
                 <h1
                     style={{
-                        color: '#fff',
-                        fontSize: 'clamp(16px, 4vw, 22px)',
-                        marginBottom: '6px',
+                        fontFamily: 'var(--serif)',
+                        fontWeight: '800',
+                        fontSize: 'clamp(34px, 9vw, 48px)',
+                        lineHeight: '1.08',
+                        letterSpacing: '-1px',
+                        color: 'var(--text)',
+                        marginBottom: '24px',
                     }}
                 >
-                    {lesson.title}
-                </h1>
-                <p
-                    style={{
-                        color: '#64748b',
-                        fontSize: '13px',
-                        marginBottom: '20px',
-                    }}
-                >
-                    {course?.title}
-                </p>
-
-                {/* Видеоплеер */}
-                <div
-                    style={{
-                        position: 'relative',
-                        marginBottom: '20px',
-                        borderRadius: '12px',
-                        overflow: 'hidden',
-                    }}
-                >
-                    {videoUrl ? (
-                        <div style={{ position: 'relative' }}>
-                            <div data-vjs-player>
-                                <video
-                                    ref={videoRef}
-                                    className="video-js vjs-big-play-centered"
-                                    style={{
-                                        width: '100%',
-                                        borderRadius: '12px',
-                                    }}
-                                />
-                            </div>
-                            <div
-                                style={{
-                                    position: 'absolute',
-                                    top: '12px',
-                                    right: '12px',
-                                    color: 'rgba(255,255,255,0.3)',
-                                    fontSize: '11px',
-                                    pointerEvents: 'none',
-                                    userSelect: 'none',
-                                    zIndex: 10,
-                                }}
-                            >
-                                {user?.email}
-                            </div>
-                        </div>
+                    {titleHead && <>{titleHead} </>}
+                    {titleHead ? (
+                        <em style={{ fontStyle: 'italic', color: 'var(--accent-soft)', fontWeight: '500' }}>
+                            {titleTail}
+                        </em>
                     ) : (
-                        <div
-                            style={{
-                                background: '#111827',
-                                border: '1px solid #1e2433',
-                                borderRadius: '12px',
-                                padding: '40px 20px',
-                                textAlign: 'center',
-                            }}
-                        >
-                            <p style={{ color: '#64748b', fontSize: '14px' }}>
-                                🎬 Видео для этого урока ещё не загружено
-                            </p>
-                        </div>
+                        titleTail
                     )}
-                </div>
+                </h1>
 
-                {/* Вкладки */}
-                {tabs.length > 0 && (
+                {/* Видео */}
+                {videoUrl ? (
                     <div
                         style={{
-                            display: 'flex',
-                            overflowX: 'auto',
-                            borderBottom: '1px solid #1e2433',
-                            marginBottom: '20px',
+                            position: 'relative',
+                            width: 'min(100%, 818px)',
+                            aspectRatio: '16 / 9',
+                            margin: '0 auto',
+                            borderRadius: '22px',
+                            overflow: 'hidden',
+                            background: '#000',
                         }}
                     >
-                        {tabs.map((t) => (
-                            <button
-                                key={t.id}
-                                onClick={() => setActiveTab(t.id)}
-                                style={tabStyle(t.id)}
-                            >
-                                {t.label}
-                            </button>
-                        ))}
+                        <div data-vjs-player style={{ width: '100%', height: '100%' }}>
+                            <video ref={videoRef} className="video-js vjs-big-play-centered" />
+                        </div>
+                        <div
+                            style={{
+                                position: 'absolute',
+                                top: '12px',
+                                right: '12px',
+                                color: 'rgba(255,255,255,0.3)',
+                                fontSize: '11px',
+                                pointerEvents: 'none',
+                                userSelect: 'none',
+                                zIndex: 10,
+                            }}
+                        >
+                            {profile?.login || user?.email}
+                        </div>
+                    </div>
+                ) : (
+                    <div
+                        style={{
+                            width: '100%',
+                            aspectRatio: '16 / 9',
+                            borderRadius: '22px',
+                            background: '#143560',
+                            border: '1px solid var(--border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '16px',
+                            padding: '20px',
+                            textAlign: 'center',
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: '64px',
+                                height: '64px',
+                                borderRadius: '50%',
+                                background: 'var(--accent)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--bg)">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                            Видео для этого урока ещё не загружено
+                        </p>
                     </div>
                 )}
 
-                {/* Контент вкладки: Конспект */}
+                {/* Вкладки */}
+                <div
+                    style={{
+                        display: 'flex',
+                        overflowX: 'auto',
+                        borderBottom: '1px solid var(--border-soft)',
+                        marginTop: '30px',
+                    }}
+                >
+                    {tabs.map((t) => {
+                        const active = activeTab === t.id;
+                        return (
+                            <button
+                                key={t.id}
+                                onClick={() => setActiveTab(t.id)}
+                                style={{
+                                    padding: '12px 2px',
+                                    marginRight: '26px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    borderBottom: active
+                                        ? '2px solid var(--accent-soft)'
+                                        : '2px solid transparent',
+                                    marginBottom: '-1px',
+                                    color: active ? 'var(--text)' : 'var(--text-muted)',
+                                    fontSize: '15px',
+                                    fontWeight: active ? '700' : '600',
+                                    fontFamily: 'var(--sans)',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {t.label}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Конспект */}
                 {activeTab === 'notes' && (
-                    <div
-                        style={{
-                            background: '#111827',
-                            border: '1px solid #1e2433',
-                            borderRadius: '12px',
-                            padding: '20px',
-                            marginBottom: '20px',
-                        }}
-                    >
+                    <div style={{ padding: '26px 0 6px' }}>
                         {lesson.content ? (
-    <div
-        className="lesson-rich"
-        style={{
-            color: '#94a3b8',
-            fontSize: '14px',
-            lineHeight: '1.8',
-            userSelect: 'none',
-        }}
-        dangerouslySetInnerHTML={{ __html: lesson.content }}
-    />
-) : (
-                            <p style={{ color: '#64748b', fontSize: '14px' }}>
+                            <div
+                                className="lesson-rich"
+                                dangerouslySetInnerHTML={{ __html: lesson.content }}
+                            />
+                        ) : (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
                                 Конспект для этого урока ещё не добавлен
                             </p>
                         )}
                     </div>
                 )}
 
-                {/* Контент вкладки: Презентация */}
+                {/* Презентация */}
                 {activeTab === 'presentation' && presUrl && (
-                    <div
-                        style={{
-                            background: '#111827',
-                            border: '1px solid #1e2433',
-                            borderRadius: '12px',
-                            padding: '20px',
-                            marginBottom: '20px',
-                        }}
-                    >
+                    <div style={{ padding: '22px 0 6px' }}>
                         {!showCanvasPdf && (
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
                                 <button
                                     onClick={() => window.open(presUrl, '_blank')}
                                     style={{
-                                        padding: '6px 12px',
-                                        background: 'rgba(0,229,255,0.1)',
-                                        border: '1px solid rgba(0,229,255,0.3)',
-                                        borderRadius: '6px',
-                                        color: '#00e5ff',
+                                        padding: '9px 16px',
+                                        background: 'transparent',
+                                        border: '1.5px solid rgba(111,163,224,0.5)',
+                                        borderRadius: '999px',
+                                        color: 'var(--accent-soft)',
                                         cursor: 'pointer',
-                                        fontSize: '12px',
+                                        fontSize: '13px',
+                                        fontWeight: '700',
+                                        fontFamily: 'var(--sans)',
                                     }}
                                 >
                                     Открыть на весь экран
                                 </button>
                             </div>
                         )}
-
                         {showCanvasPdf ? (
                             <PdfViewer url={presUrl} />
                         ) : (
@@ -541,7 +517,7 @@ export default function LessonPage() {
                                     width: '100%',
                                     height: '80vh',
                                     border: 'none',
-                                    borderRadius: '8px',
+                                    borderRadius: '14px',
                                     background: '#fff',
                                 }}
                             />
@@ -549,17 +525,9 @@ export default function LessonPage() {
                     </div>
                 )}
 
-                {/* Контент вкладки: Файлы */}
+                {/* Файлы */}
                 {activeTab === 'files' && hasFiles && (
-                    <div
-                        style={{
-                            background: '#111827',
-                            border: '1px solid #1e2433',
-                            borderRadius: '12px',
-                            padding: '20px',
-                            marginBottom: '20px',
-                        }}
-                    >
+                    <div style={{ padding: '22px 0 6px' }}>
                         {lesson.lesson_files.map((f) => (
                             <div
                                 key={f.id}
@@ -568,35 +536,24 @@ export default function LessonPage() {
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
                                     flexWrap: 'wrap',
-                                    gap: '8px',
-                                    padding: '10px 14px',
-                                    background: '#0a0e1a',
-                                    border: '1px solid #1e2433',
-                                    borderRadius: '6px',
-                                    marginBottom: '8px',
+                                    gap: '10px',
+                                    padding: '16px 0',
+                                    borderBottom: '1px solid var(--border-soft)',
                                 }}
                             >
-                                <span style={{ color: '#94a3b8', fontSize: '13px' }}>
-                                    📎 {f.name}
-                                </span>
+                                <span style={{ color: 'var(--text)', fontSize: '15px' }}>📎 {f.name}</span>
                                 <button
-                                    onClick={async () => {
-                                        const res = await fetch('/api/video-url', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ key: f.file_key }),
-                                        });
-                                        const { url } = await res.json();
-                                        window.open(url, '_blank');
-                                    }}
+                                    onClick={() => downloadFile(f.file_key)}
                                     style={{
-                                        padding: '6px 12px',
-                                        background: 'rgba(0,229,255,0.1)',
-                                        border: '1px solid rgba(0,229,255,0.3)',
-                                        borderRadius: '6px',
-                                        color: '#00e5ff',
+                                        padding: '9px 18px',
+                                        background: 'transparent',
+                                        border: '1.5px solid rgba(111,163,224,0.5)',
+                                        borderRadius: '999px',
+                                        color: 'var(--accent-soft)',
                                         cursor: 'pointer',
-                                        fontSize: '12px',
+                                        fontSize: '13px',
+                                        fontWeight: '700',
+                                        fontFamily: 'var(--sans)',
                                     }}
                                 >
                                     Скачать
@@ -606,24 +563,73 @@ export default function LessonPage() {
                     </div>
                 )}
 
-                {/* Кнопка завершения */}
-                <button
-                    onClick={markComplete}
-                    style={{
-                        width: '100%',
-                        padding: '14px 28px',
-                        background: 'rgba(16,185,129,0.1)',
-                        border: '1px solid rgba(16,185,129,0.3)',
-                        borderRadius: '8px',
-                        color: '#10b981',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                    }}
-                >
-                    ✅ Отметить урок завершённым
-                </button>
-            </div>
+                {/* Есть вопрос? */}
+                {CURATOR_LINK && (
+                    <div
+                        style={{
+                            marginTop: '30px',
+                            padding: '24px 22px',
+                            borderRadius: '22px',
+                            background: 'var(--card-bg)',
+                            border: '1px solid var(--border)',
+                        }}
+                    >
+                        <p style={{ fontFamily: 'var(--serif)', fontWeight: '700', fontSize: '24px', color: 'var(--text)', marginBottom: '8px' }}>
+                            Есть вопрос?
+                        </p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '14.5px', lineHeight: '1.55', marginBottom: '18px' }}>
+                            Личный куратор отвечает по делу, а не отправляет «гуглить самому».
+                        </p>
+                        <a
+                            href={CURATOR_LINK}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                ...pillSolid,
+                                display: 'block',
+                                textAlign: 'center',
+                                textDecoration: 'none',
+                                boxSizing: 'border-box',
+                            }}
+                        >
+                            Написать куратору
+                        </a>
+                    </div>
+                )}
+
+                {/* Действия */}
+                <div style={{ marginTop: '28px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <button
+                        onClick={markComplete}
+                        disabled={saving || completed}
+                        style={
+                            completed
+                                ? {
+                                      ...pillSolid,
+                                      background: 'rgba(111,163,224,0.16)',
+                                      color: 'var(--text)',
+                                      cursor: 'default',
+                                  }
+                                : { ...pillSolid, opacity: saving ? 0.6 : 1 }
+                        }
+                    >
+                        {completed ? '✓ Урок пройден' : saving ? 'Сохраняю...' : 'Отметить пройденным'}
+                    </button>
+
+                    <button
+                        onClick={() =>
+                            router.push(
+                                nextLessonId
+                                    ? `/learn/${courseId}/${nextLessonId}`
+                                    : `/learn/${courseId}`,
+                            )
+                        }
+                        style={pillOutline}
+                    >
+                        {nextLessonId ? 'Следующий урок →' : 'К программе курса'}
+                    </button>
+                </div>
+            </main>
         </div>
     );
 }
