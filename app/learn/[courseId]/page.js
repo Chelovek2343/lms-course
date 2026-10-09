@@ -3,14 +3,19 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '../../../lib/supabase';
 import { useRouter, useParams } from 'next/navigation';
+import AppHeader from '../../../components/AppHeader';
+import BottomNav from '../../../components/BottomNav';
 
-export default function LearnPage() {
+const MAX_WIDTH = 720;
+const STAFF = ['admin', 'superuser', 'owner'];
+
+export default function CoursePage() {
+    const [profile, setProfile] = useState(null);
     const [course, setCourse] = useState(null);
-    const [sections, setSections] = useState([]);
-    const [lessons, setLessons] = useState([]);
-    const [progress, setProgress] = useState([]);
-    const [user, setUser] = useState(null);
+    const [groups, setGroups] = useState([]);
+    const [completedIds, setCompletedIds] = useState(new Set());
     const [loading, setLoading] = useState(true);
+    const [notFound, setNotFound] = useState(false);
     const router = useRouter();
     const { courseId } = useParams();
     const supabase = createClient();
@@ -24,349 +29,357 @@ export default function LearnPage() {
                 router.push('/login');
                 return;
             }
-            setUser(user);
 
-            // Проверяем запись на курс
-            const { data: enrollment } = await supabase
-                .from('enrollments')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('course_id', courseId)
+            const { data: prof } = await supabase
+                .from('profiles')
+                .select('login, email, role')
+                .eq('id', user.id)
                 .single();
+            setProfile(prof);
 
-            if (!enrollment) {
-                router.push('/courses');
+            if (!STAFF.includes(prof?.role)) {
+                const { data: enrollment } = await supabase
+                    .from('enrollments')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('course_id', courseId)
+                    .maybeSingle();
+
+                if (!enrollment) {
+                    router.push('/courses');
+                    return;
+                }
+            }
+
+            const [courseRes, sectionsRes, lessonsRes, progressRes] = await Promise.all([
+                supabase.from('courses').select('*').eq('id', courseId).single(),
+                supabase
+                    .from('sections')
+                    .select('*')
+                    .eq('course_id', courseId)
+                    .order('order_index'),
+                supabase
+                    .from('lessons')
+                    .select('id, title, order_index, section_id, sections!inner(course_id)')
+                    .eq('sections.course_id', courseId)
+                    .order('order_index'),
+                supabase
+                    .from('progress')
+                    .select('lesson_id')
+                    .eq('user_id', user.id)
+                    .eq('completed', true),
+            ]);
+
+            if (!courseRes.data) {
+                setNotFound(true);
+                setLoading(false);
                 return;
             }
 
-            // Загружаем курс
-            const { data: course } = await supabase
-                .from('courses')
-                .select('*')
-                .eq('id', courseId)
-                .single();
+            const sections = sectionsRes.data || [];
+            const lessons = lessonsRes.data || [];
 
-            // Загружаем секции
-            const { data: sections } = await supabase
-                .from('sections')
-                .select('*')
-                .eq('course_id', courseId)
-                .order('order_index');
+            let counter = 0;
+            const built = sections.map((s) => ({
+                ...s,
+                lessons: lessons
+                    .filter((l) => l.section_id === s.id)
+                    .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+                    .map((l) => ({ ...l, number: ++counter })),
+            }));
 
-            // Загружаем уроки
-            const { data: lessons } = await supabase
-                .from('lessons')
-                .select('*, sections!inner(course_id)')
-                .eq('sections.course_id', courseId)
-                .order('order_index');
-
-            // Загружаем прогресс
-            const { data: progress } = await supabase
-                .from('progress')
-                .select('*')
-                .eq('user_id', user.id);
-
-            setCourse(course);
-            setSections(sections || []);
-            setLessons(lessons || []);
-            setProgress(progress || []);
+            setCourse(courseRes.data);
+            setGroups(built);
+            setCompletedIds(new Set((progressRes.data || []).map((p) => p.lesson_id)));
             setLoading(false);
         };
+
         init();
     }, [courseId]);
 
-    const markComplete = async (lessonId) => {
-        const existing = progress.find((p) => p.lesson_id === lessonId);
-
-        if (existing) {
-            await supabase
-                .from('progress')
-                .update({ completed: true, watch_pct: 100 })
-                .eq('id', existing.id);
-        } else {
-            await supabase.from('progress').insert({
-                user_id: user.id,
-                lesson_id: lessonId,
-                completed: true,
-                watch_pct: 100,
-            });
-        }
-
-        setProgress((prev) => {
-            const filtered = prev.filter((p) => p.lesson_id !== lessonId);
-            return [
-                ...filtered,
-                { lesson_id: lessonId, completed: true, watch_pct: 100 },
-            ];
-        });
-    };
-
-    const isCompleted = (lessonId) =>
-        progress.find((p) => p.lesson_id === lessonId)?.completed;
-
-    const completedCount = lessons.filter((l) => isCompleted(l.id)).length;
-    const totalCount = lessons.length;
-    const percentage =
-        totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    const displayName = profile?.login || profile?.email || '?';
+    const initial = displayName.trim().charAt(0).toUpperCase();
 
     if (loading)
         return (
             <div
                 style={{
                     minHeight: '100vh',
-                    background: '#0a0e1a',
+                    background: 'var(--bg)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}
             >
-                <p style={{ color: '#64748b', fontFamily: 'monospace' }}>
+                <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--sans)' }}>
                     Загрузка...
                 </p>
             </div>
         );
 
-    return (
-        <div
-            style={{
-                minHeight: '100vh',
-                background: '#0a0e1a',
-                fontFamily: 'monospace',
-                padding: '20px',
-            }}
-        >
+    if (notFound)
+        return (
+            <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)' }}>
+                <AppHeader initial={initial} maxWidth={MAX_WIDTH} />
+                <div style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '48px 20px' }}>
+                    <h1 style={{ fontFamily: 'var(--serif)', fontWeight: '700', fontSize: '30px', color: 'var(--text)', marginBottom: '12px' }}>
+                        Курс не найден
+                    </h1>
+                    <button
+                        onClick={() => router.push('/dashboard')}
+                        style={{
+                            padding: '14px 26px',
+                            borderRadius: '999px',
+                            border: '1.5px solid rgba(255,255,255,0.35)',
+                            background: 'transparent',
+                            color: 'var(--text)',
+                            fontWeight: '700',
+                            fontFamily: 'var(--sans)',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Мои курсы
+                    </button>
+                </div>
+            </div>
+        );
 
-            <style>{`
-    .lesson-rich h2 { color: #00e5ff; font-size: 18px; margin: 16px 0 8px; font-family: monospace; }
-    .lesson-rich h3 { color: #7c3aed; font-size: 15px; margin: 14px 0 6px; font-family: monospace; }
-    .lesson-rich p { margin: 0 0 10px; }
-    .lesson-rich ul, .lesson-rich ol { margin: 0 0 10px 20px; padding: 0; }
-    .lesson-rich li { margin-bottom: 4px; }
-    .lesson-rich strong { color: #fff; }
-`}</style>
-            
-            <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+    const flat = groups.flatMap((g) => g.lessons);
+    const total = flat.length;
+    const completedCount = flat.filter((l) => completedIds.has(l.id)).length;
+    const percent = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+    const nextLesson = flat.find((l) => !completedIds.has(l.id));
+    const allDone = total > 0 && completedCount >= total;
+
+    let ctaLabel = 'Начать курс';
+    let ctaTarget = flat[0]?.id;
+    if (allDone) {
+        ctaLabel = 'Повторить курс';
+    } else if (completedCount > 0 && nextLesson) {
+        ctaLabel = 'Продолжить';
+        ctaTarget = nextLesson.id;
+    }
+
+    const words = (course.title || '').trim().split(/\s+/);
+    const titleHead = words.length > 1 ? words.slice(0, -1).join(' ') : '';
+    const titleTail = words[words.length - 1] || '';
+
+    return (
+        <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)', paddingBottom: '100px' }}>
+            <AppHeader initial={initial} maxWidth={MAX_WIDTH} />
+
+            <main style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '26px 20px 0' }}>
                 <button
-                    onClick={() => router.push('/courses')}
+                    onClick={() => router.push('/dashboard')}
                     style={{
-                        padding: '8px 16px',
-                        background: 'transparent',
-                        border: '1px solid #1e2433',
-                        borderRadius: '6px',
-                        color: '#64748b',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: 'var(--accent-soft)',
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        fontFamily: 'var(--sans)',
                         cursor: 'pointer',
-                        fontSize: '13px',
-                        marginBottom: '20px',
+                        marginBottom: '26px',
                     }}
                 >
-                    ← Назад к курсам
+                    ← Мои курсы
                 </button>
+
+                <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '14px', marginBottom: '10px' }}>
+                    Программа курса
+                </p>
 
                 <h1
                     style={{
-                        color: '#fff',
-                        fontSize: 'clamp(18px, 4vw, 24px)',
-                        marginBottom: '8px',
+                        fontFamily: 'var(--serif)',
+                        fontWeight: '800',
+                        fontSize: 'clamp(34px, 9vw, 48px)',
+                        lineHeight: '1.08',
+                        letterSpacing: '-1px',
+                        color: 'var(--text)',
+                        marginBottom: '14px',
                     }}
                 >
-                    {course?.title}
+                    {titleHead && <>{titleHead} </>}
+                    {titleHead ? (
+                        <em style={{ fontStyle: 'italic', color: 'var(--accent-soft)', fontWeight: '500' }}>
+                            {titleTail}
+                        </em>
+                    ) : (
+                        titleTail
+                    )}
                 </h1>
-                <p
-                    style={{
-                        color: '#64748b',
-                        fontSize: '13px',
-                        marginBottom: '24px',
-                    }}
-                >
-                    {course?.description}
-                </p>
 
-                {/* Прогресс бар */}
-                <div
-                    style={{
-                        background: '#111827',
-                        border: '1px solid #1e2433',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        marginBottom: '24px',
-                    }}
-                >
+                {course.description && (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.6', maxWidth: '46ch' }}>
+                        {course.description}
+                    </p>
+                )}
+
+                {/* Прогресс */}
+                {total > 0 && (
                     <div
                         style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            marginBottom: '8px',
+                            marginTop: '28px',
+                            padding: '22px',
+                            borderRadius: '22px',
+                            background: 'var(--card-bg)',
+                            border: '1px solid var(--border)',
                         }}
                     >
-                        <span style={{ color: '#fff', fontSize: '13px' }}>
-                            Прогресс курса
-                        </span>
-                        <span
-                            style={{
-                                color: '#00e5ff',
-                                fontSize: '13px',
-                                fontWeight: '600',
-                            }}
-                        >
-                            {percentage}%
-                        </span>
-                    </div>
-                    <div
-                        style={{
-                            background: '#0a0e1a',
-                            borderRadius: '4px',
-                            height: '6px',
-                            overflow: 'hidden',
-                        }}
-                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '10px' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>
+                                {completedCount} из {total} уроков
+                            </span>
+                            <span style={{ color: 'var(--text)', fontWeight: '700' }}>{percent}%</span>
+                        </div>
                         <div
                             style={{
-                                width: `${percentage}%`,
-                                height: '100%',
-                                background:
-                                    'linear-gradient(90deg, #00e5ff, #7c3aed)',
-                                borderRadius: '4px',
-                                transition: 'width 0.3s ease',
+                                height: '6px',
+                                borderRadius: '999px',
+                                background: 'rgba(111,163,224,0.18)',
+                                overflow: 'hidden',
+                                marginBottom: '18px',
                             }}
-                        />
+                        >
+                            <div
+                                style={{
+                                    width: `${percent}%`,
+                                    height: '100%',
+                                    background: 'var(--accent-soft)',
+                                    borderRadius: '999px',
+                                    transition: 'width 0.4s ease',
+                                }}
+                            />
+                        </div>
+                        <button
+                            onClick={() => ctaTarget && router.push(`/learn/${courseId}/${ctaTarget}`)}
+                            style={{
+                                width: '100%',
+                                padding: '15px',
+                                borderRadius: '999px',
+                                border: 'none',
+                                background: 'var(--accent)',
+                                color: 'var(--bg)',
+                                fontSize: '15px',
+                                fontWeight: '700',
+                                fontFamily: 'var(--sans)',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {ctaLabel}
+                        </button>
                     </div>
-                    <p
-                        style={{
-                            color: '#64748b',
-                            fontSize: '12px',
-                            marginTop: '8px',
-                        }}
-                    >
-                        {completedCount} из {totalCount} уроков завершено
-                    </p>
-                </div>
+                )}
 
                 {/* Секции и уроки */}
-                {sections.length === 0 && (
+                {total === 0 && (
                     <div
                         style={{
-                            background: '#111827',
-                            border: '1px solid #1e2433',
-                            borderRadius: '12px',
-                            padding: '40px 20px',
-                            textAlign: 'center',
+                            marginTop: '28px',
+                            padding: '28px 22px',
+                            borderRadius: '22px',
+                            background: 'var(--card-bg)',
+                            border: '1px solid var(--border)',
                         }}
                     >
-                        <p style={{ color: '#64748b', fontSize: '14px' }}>
-                            Уроки ещё не добавлены
+                        <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
+                            Уроки ещё не добавлены, материалы готовятся.
                         </p>
                     </div>
                 )}
 
-                {sections.map((section) => (
-                    <div key={section.id} style={{ marginBottom: '20px' }}>
-                        <h2
-                            style={{
-                                color: '#94a3b8',
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                letterSpacing: '2px',
-                                textTransform: 'uppercase',
-                                marginBottom: '10px',
-                                paddingLeft: '4px',
-                            }}
-                        >
-                            {section.title}
-                        </h2>
-
-                        <div
-                            style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '8px',
-                            }}
-                        >
-                            {lessons
-                                .filter((l) => l.section_id === section.id)
-                                .map((lesson) => (
-                                    <div
-                                        key={lesson.id}
-                                        style={{
-                                            background: '#111827',
-                                            border: `1px solid ${isCompleted(lesson.id) ? 'rgba(16,185,129,0.3)' : '#1e2433'}`,
-                                            borderRadius: '8px',
-                                            padding: '14px 16px',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            gap: '12px',
-                                            flexWrap: 'wrap',
-                                        }}
-                                    >
-                                        <div
+                {groups
+                    .filter((g) => g.lessons.length > 0)
+                    .map((g) => (
+                        <section key={g.id} style={{ marginTop: '36px' }}>
+                            <p
+                                style={{
+                                    color: 'var(--accent-soft)',
+                                    fontSize: '12px',
+                                    fontWeight: '700',
+                                    letterSpacing: '1.5px',
+                                    textTransform: 'uppercase',
+                                    marginBottom: '6px',
+                                }}
+                            >
+                                {g.title}
+                            </p>
+                            <div style={{ borderTop: '1px solid var(--border-soft)' }}>
+                                {g.lessons.map((l) => {
+                                    const done = completedIds.has(l.id);
+                                    return (
+                                        <button
+                                            key={l.id}
+                                            onClick={() => router.push(`/learn/${courseId}/${l.id}`)}
                                             style={{
+                                                width: '100%',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '10px',
-                                                flex: 1,
-                                                minWidth: '0',
+                                                gap: '14px',
+                                                padding: '18px 0',
+                                                background: 'transparent',
+                                                border: 'none',
+                                                borderBottom: '1px solid var(--border-soft)',
+                                                cursor: 'pointer',
+                                                textAlign: 'left',
+                                                fontFamily: 'var(--sans)',
                                             }}
                                         >
                                             <span
                                                 style={{
+                                                    flex: 'none',
+                                                    width: '34px',
+                                                    fontFamily: 'var(--serif)',
+                                                    fontWeight: '700',
                                                     fontSize: '18px',
-                                                    flexShrink: 0,
+                                                    color: 'var(--accent-soft)',
                                                 }}
                                             >
-                                                {isCompleted(lesson.id)
-                                                    ? '✅'
-                                                    : '▶️'}
+                                                {l.number}
                                             </span>
                                             <span
-                                                onClick={() =>
-                                                    router.push(
-                                                        `/learn/${courseId}/${lesson.id}`,
-                                                    )
-                                                }
                                                 style={{
-                                                    color: isCompleted(
-                                                        lesson.id,
-                                                    )
-                                                        ? '#10b981'
-                                                        : '#00e5ff',
-                                                    fontSize: '14px',
-                                                    cursor: 'pointer',
-                                                    textDecoration: 'underline',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap',
+                                                    flex: 1,
+                                                    fontSize: '16px',
+                                                    color: done ? 'var(--text-muted)' : 'var(--text)',
                                                 }}
                                             >
-                                                {lesson.title}
+                                                {l.title}
                                             </span>
-                                        </div>
+                                            {done ? (
+                                                <span
+                                                    style={{
+                                                        flex: 'none',
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        borderRadius: '50%',
+                                                        background: 'var(--accent-soft)',
+                                                        color: 'var(--bg)',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        fontSize: '13px',
+                                                        fontWeight: '800',
+                                                    }}
+                                                >
+                                                    ✓
+                                                </span>
+                                            ) : (
+                                                <span style={{ flex: 'none', color: 'var(--text-faint)', fontSize: '20px' }}>
+                                                    ›
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    ))}
+            </main>
 
-                                        {!isCompleted(lesson.id) && (
-                                            <button
-                                                onClick={() =>
-                                                    markComplete(lesson.id)
-                                                }
-                                                style={{
-                                                    padding: '6px 12px',
-                                                    background:
-                                                        'rgba(16,185,129,0.1)',
-                                                    border: '1px solid rgba(16,185,129,0.3)',
-                                                    borderRadius: '6px',
-                                                    color: '#10b981',
-                                                    cursor: 'pointer',
-                                                    fontSize: '12px',
-                                                    flexShrink: 0,
-                                                }}
-                                            >
-                                                Отметить ✓
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-                        </div>
-                    </div>
-                ))}
-            </div>
+            <BottomNav />
         </div>
     );
 }
