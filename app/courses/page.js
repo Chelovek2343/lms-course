@@ -2,13 +2,34 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '../../lib/supabase';
+import { CURATOR_LINK } from '../../lib/config';
 import { useRouter } from 'next/navigation';
+import AppHeader from '../../components/AppHeader';
+import BottomNav from '../../components/BottomNav';
+
+const MAX_WIDTH = 720;
+const STAFF = ['admin', 'superuser', 'owner'];
+
+const pill = (variant) => ({
+    padding: '12px 20px',
+    borderRadius: '999px',
+    fontSize: '14px',
+    fontWeight: '700',
+    fontFamily: 'var(--sans)',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(variant === 'solid'
+        ? { background: 'var(--accent)', color: 'var(--bg)', border: 'none' }
+        : { background: 'transparent', color: 'var(--accent-soft)', border: '1.5px solid rgba(111,163,224,0.5)' }),
+});
 
 export default function CoursesPage() {
+    const [profile, setProfile] = useState(null);
     const [courses, setCourses] = useState([]);
-    const [enrollments, setEnrollments] = useState([]);
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loadingCourses, setLoadingCourses] = useState(true);
     const router = useRouter();
     const supabase = createClient();
 
@@ -17,293 +38,436 @@ export default function CoursesPage() {
             const {
                 data: { user },
             } = await supabase.auth.getUser();
+
             if (!user) {
-                router.push('/login');
+                router.replace('/login');
                 return;
             }
-            setUser(user);
 
-            // Проверяем успешную оплату
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('success') === 'true') {
-                // Получаем последний купленный курс из localStorage
-                const lastCourseId = localStorage.getItem('pendingCourseId');
-                if (lastCourseId) {
-                    await supabase
-                        .from('enrollments')
-                        .insert({ user_id: user.id, course_id: lastCourseId });
-                    localStorage.removeItem('pendingCourseId');
-                }
-            }
-
-            const { data: courses } = await supabase
-                .from('courses')
+            const { data: profile } = await supabase
+                .from('profiles')
                 .select('*')
-                .eq('is_published', true)
-                .order('created_at', { ascending: false });
+                .eq('id', user.id)
+                .single();
 
-            const { data: enrollments } = await supabase
-                .from('enrollments')
-                .select('course_id')
-                .eq('user_id', user.id);
-
-            setCourses(courses || []);
-            setEnrollments(enrollments?.map((e) => e.course_id) || []);
-            setLoading(false);
+            setProfile(profile);
+            await loadCourses(user.id, STAFF.includes(profile?.role));
         };
+
         init();
     }, []);
 
-    const enroll = async (courseId) => {
-        const { error } = await supabase
-            .from('enrollments')
-            .insert({ user_id: user.id, course_id: courseId });
+    const loadCourses = async (userId, staff) => {
+        let list = [];
 
-        if (!error) {
-            setEnrollments([...enrollments, courseId]);
+        if (staff) {
+            const { data } = await supabase
+                .from('courses')
+                .select('id, title, description, is_published')
+                .order('created_at', { ascending: true });
+            list = data || [];
+        } else {
+            const { data: enrollments } = await supabase
+                .from('enrollments')
+                .select('course_id, courses(id, title, description, is_published)')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: true });
+            list = (enrollments || []).map((e) => e.courses).filter(Boolean);
         }
-    };
 
-    const handleBuy = async (course) => {
-        const res = await fetch('/api/stripe/create-checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                courseId: course.id,
-                userId: user.id,
-                userEmail: user.email,
-                price: course.price,
-                title: course.title,
-            }),
-        });
-
-        const { url, error } = await res.json();
-        if (error) {
-            alert('Ошибка: ' + error);
+        if (list.length === 0) {
+            setCourses([]);
+            setLoadingCourses(false);
             return;
         }
-        localStorage.setItem('pendingCourseId', course.id);
-        window.location.href = url;
+
+        const courseIds = list.map((c) => c.id);
+
+        const { data: lessons } = await supabase
+            .from('lessons')
+            .select('id, order_index, sections!inner(course_id, order_index)')
+            .in('sections.course_id', courseIds);
+
+        const { data: progress } = await supabase
+            .from('progress')
+            .select('lesson_id')
+            .eq('user_id', userId)
+            .eq('completed', true);
+
+        const completedIds = new Set((progress || []).map((p) => p.lesson_id));
+
+        const byCourse = {};
+        courseIds.forEach((id) => (byCourse[id] = []));
+        (lessons || []).forEach((l) => {
+            const cid = l.sections?.course_id;
+            if (!byCourse[cid]) return;
+            byCourse[cid].push({
+                id: l.id,
+                order: (l.sections?.order_index || 0) * 10000 + (l.order_index || 0),
+            });
+        });
+
+        const result = list.map((course) => {
+            const items = (byCourse[course.id] || []).sort((a, b) => a.order - b.order);
+            const total = items.length;
+            const completed = items.filter((l) => completedIds.has(l.id)).length;
+            const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+            const nextLesson = items.find((l) => !completedIds.has(l.id));
+
+            return {
+                ...course,
+                total,
+                completed,
+                percent,
+                firstLessonId: items[0]?.id || null,
+                nextLessonId: nextLesson?.id || null,
+            };
+        });
+
+        setCourses(result);
+        setLoadingCourses(false);
     };
 
-    if (loading)
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        router.push('/login');
+    };
+
+    if (!profile)
         return (
             <div
                 style={{
                     minHeight: '100vh',
-                    background: '#0a0e1a',
+                    background: 'var(--bg)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                 }}
             >
-                <p style={{ color: '#64748b', fontFamily: 'monospace' }}>
+                <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--sans)' }}>
                     Загрузка...
                 </p>
             </div>
         );
 
+    const isStaff = STAFF.includes(profile.role);
+    const displayName = profile.login || profile.email || '?';
+    const initial = displayName.trim().charAt(0).toUpperCase();
+    const completedCourses = courses.filter((c) => c.total > 0 && c.completed >= c.total).length;
+
     return (
-        <div
-            style={{
-                minHeight: '100vh',
-                background: '#0a0e1a',
-                fontFamily: 'monospace',
-                padding: '20px',
-            }}
-        >
-            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-                <div
+        <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)', paddingBottom: '100px' }}>
+            <AppHeader initial={initial} maxWidth={MAX_WIDTH} />
+
+            <main style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '32px 20px 0' }}>
+                <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '13px', marginBottom: '14px' }}>
+                    {isStaff ? 'Каталог курсов' : 'Личный кабинет'}
+                </p>
+
+                <h1
                     style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '30px',
-                        flexWrap: 'wrap',
-                        gap: '16px',
+                        fontFamily: 'var(--serif)',
+                        fontWeight: '800',
+                        fontSize: 'clamp(36px, 9vw, 52px)',
+                        lineHeight: '1.06',
+                        letterSpacing: '-1px',
+                        color: 'var(--text)',
+                        marginBottom: '16px',
+                        maxWidth: '14ch',
                     }}
                 >
-                    <div>
-                        <h1
-                            style={{
-                                color: '#fff',
-                                fontSize: 'clamp(18px, 4vw, 24px)',
-                                marginBottom: '4px',
-                            }}
-                        >
-                            📚 Каталог курсов
-                        </h1>
-                        <p style={{ color: '#64748b', fontSize: '13px' }}>
-                            Выбери курс и начни обучение
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => router.push('/dashboard')}
-                        style={{
-                            padding: '8px 16px',
-                            background: 'transparent',
-                            border: '1px solid #1e2433',
-                            borderRadius: '8px',
-                            color: '#fff',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                        }}
-                    >
-                        ← Dashboard
-                    </button>
-                </div>
+                    {isStaff ? (
+                        <>
+                            Курсы{' '}
+                            <em style={{ fontStyle: 'italic', color: 'var(--accent-soft)', fontWeight: '500' }}>
+                                платформы
+                            </em>
+                        </>
+                    ) : (
+                        <>
+                            Твоё поступление{' '}
+                            <em style={{ fontStyle: 'italic', color: 'var(--accent-soft)', fontWeight: '500' }}>
+                                шаг за шагом
+                            </em>
+                        </>
+                    )}
+                </h1>
 
-                {courses.length === 0 && (
+                <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.6', maxWidth: '42ch' }}>
+                    {isStaff
+                        ? 'Просмотр курсов глазами студента. Редактирование — в админ-панели.'
+                        : 'Все уроки, презентации и задания — в одном месте.'}
+                </p>
+
+                {/* Счётчик (только студентам) */}
+                {!isStaff && !loadingCourses && courses.length > 0 && (
                     <div
                         style={{
-                            background: '#111827',
-                            border: '1px solid #1e2433',
-                            borderRadius: '12px',
-                            padding: '60px 20px',
-                            textAlign: 'center',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '16px',
+                            flexWrap: 'wrap',
+                            padding: '22px 0',
+                            margin: '28px 0 24px',
+                            borderTop: '1px solid var(--border-soft)',
+                            borderBottom: '1px solid var(--border-soft)',
                         }}
                     >
-                        <p style={{ color: '#64748b', fontSize: '14px' }}>
-                            Курсов пока нет
-                        </p>
+                        <div>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '4px' }}>
+                                Пройдено курсов
+                            </p>
+                            <p style={{ fontFamily: 'var(--serif)', fontWeight: '600', fontSize: '32px', color: 'var(--accent-soft)' }}>
+                                {completedCourses} из {courses.length}
+                            </p>
+                        </div>
+                        {CURATOR_LINK && (
+                            <a href={CURATOR_LINK} target="_blank" rel="noopener noreferrer" style={pill('outline')}>
+                                Написать куратору
+                            </a>
+                        )}
                     </div>
                 )}
 
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns:
-                            'repeat(auto-fill, minmax(min(100%, 280px), 1fr))',
-                        gap: '16px',
-                    }}
-                >
-                    {courses.map((course) => {
-                        const isEnrolled = enrollments.includes(course.id);
-                        return (
-                            <div
-                                key={course.id}
-                                style={{
-                                    background: '#111827',
-                                    border: '1px solid #1e2433',
-                                    borderRadius: '12px',
-                                    padding: '20px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '12px',
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        height: '120px',
-                                        background: '#0a0e1a',
-                                        borderRadius: '8px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '40px',
-                                    }}
-                                >
-                                    🎓
-                                </div>
+                {(isStaff || courses.length === 0) && <div style={{ height: '28px' }} />}
 
-                                <h3 style={{ color: '#fff', fontSize: '15px' }}>
-                                    {course.title}
-                                </h3>
-                                <p
-                                    style={{
-                                        color: '#64748b',
-                                        fontSize: '12px',
-                                        flex: 1,
-                                    }}
-                                >
-                                    {course.description ||
-                                        'Описание отсутствует'}
-                                </p>
+                {loadingCourses && (
+                    <p style={{ color: 'var(--text-faint)', fontSize: '14px' }}>Загрузка курсов...</p>
+                )}
 
-                                <div
+                {/* Пустое состояние */}
+                {!loadingCourses && courses.length === 0 && (
+                    <div
+                        style={{
+                            padding: '28px 22px',
+                            borderRadius: '22px',
+                            background: 'var(--card-bg)',
+                            border: '1px solid var(--border)',
+                        }}
+                    >
+                        <p style={{ fontFamily: 'var(--serif)', fontWeight: '600', fontSize: '22px', color: 'var(--text)', marginBottom: '8px' }}>
+                            {isStaff ? 'Курсов пока нет' : 'Пока нет доступных курсов'}
+                        </p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '14.5px', lineHeight: '1.6', marginBottom: '20px' }}>
+                            {isStaff
+                                ? 'Создайте первый курс в админ-панели.'
+                                : 'Доступ к курсу открывает куратор. Напишите нам, и мы всё подключим.'}
+                        </p>
+                        {isStaff ? (
+                            <button onClick={() => router.push('/admin/courses')} style={pill('solid')}>
+                                Создать курс
+                            </button>
+                        ) : (
+                            CURATOR_LINK && (
+                                <a href={CURATOR_LINK} target="_blank" rel="noopener noreferrer" style={pill('solid')}>
+                                    Написать куратору
+                                </a>
+                            )
+                        )}
+                    </div>
+                )}
+
+                {/* Карточки курсов */}
+                {courses.length > 0 && (
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+                            gap: '18px',
+                        }}
+                    >
+                        {courses.map((c, i) => {
+                            const done = c.total > 0 && c.completed >= c.total;
+                            const started = c.completed > 0;
+                            const active = done || started;
+                            const draft = c.is_published === false;
+
+                            const status = draft
+                                ? { label: 'Черновик', done: false }
+                                : c.total === 0
+                                ? { label: 'Материалы готовятся', done: false }
+                                : done
+                                ? { label: '✓ Курс завершён', done: true }
+                                : started
+                                ? { label: 'В процессе', done: false }
+                                : { label: 'Не начат', done: false };
+
+                            let btnLabel = 'Начать';
+                            let target = c.firstLessonId ? `/learn/${c.id}/${c.firstLessonId}` : `/learn/${c.id}`;
+                            if (done) {
+                                btnLabel = 'Повторить курс';
+                                target = `/learn/${c.id}`;
+                            } else if (started) {
+                                btnLabel = 'Продолжить';
+                                target = c.nextLessonId ? `/learn/${c.id}/${c.nextLessonId}` : `/learn/${c.id}`;
+                            }
+
+                            return (
+                                <article
+                                    key={c.id}
                                     style={{
+                                        background: 'var(--card-bg)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '24px',
+                                        overflow: 'hidden',
                                         display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        flexWrap: 'wrap',
-                                        gap: '8px',
+                                        flexDirection: 'column',
                                     }}
                                 >
-                                    <span
+                                    <div
                                         style={{
-                                            color: '#10b981',
-                                            fontSize: '13px',
-                                            fontWeight: '600',
+                                            height: '116px',
+                                            padding: '0 22px 16px',
+                                            display: 'flex',
+                                            alignItems: 'flex-end',
+                                            justifyContent: 'space-between',
+                                            background: active ? '#143560' : '#0e2a52',
                                         }}
                                     >
-                                        {course.price === 0
-                                            ? 'Бесплатно'
-                                            : `$${course.price}`}
-                                    </span>
+                                        <span
+                                            style={{
+                                                fontSize: '11px',
+                                                fontWeight: '700',
+                                                letterSpacing: '1.5px',
+                                                lineHeight: '1.5',
+                                                color: 'var(--text-muted)',
+                                            }}
+                                        >
+                                            BAT /<br />ОБРАЗОВАНИЕ
+                                        </span>
+                                        <span
+                                            style={{
+                                                fontFamily: 'var(--serif)',
+                                                fontWeight: '700',
+                                                fontSize: '64px',
+                                                lineHeight: '0.85',
+                                                color: active ? 'var(--accent-soft)' : 'rgba(111,163,224,0.4)',
+                                            }}
+                                        >
+                                            {String(i + 1).padStart(2, '0')}
+                                        </span>
+                                    </div>
 
-                                    {isEnrolled ? (
-                                        <button
-                                            onClick={() =>
-                                                router.push(
-                                                    `/learn/${course.id}`,
-                                                )
-                                            }
+                                    <div style={{ padding: '20px 22px 22px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                        <span
                                             style={{
-                                                padding: '8px 16px',
-                                                background:
-                                                    'rgba(0,229,255,0.1)',
-                                                border: '1px solid rgba(0,229,255,0.3)',
-                                                borderRadius: '6px',
-                                                color: '#00e5ff',
-                                                cursor: 'pointer',
+                                                alignSelf: 'flex-start',
+                                                padding: '5px 12px',
+                                                borderRadius: '999px',
                                                 fontSize: '12px',
-                                                fontWeight: '600',
+                                                fontWeight: '700',
+                                                marginBottom: '14px',
+                                                background: status.done ? 'rgba(111,163,224,0.18)' : 'rgba(255,255,255,0.06)',
+                                                color: status.done ? 'var(--text)' : 'var(--text-muted)',
                                             }}
                                         >
-                                            Продолжить →
-                                        </button>
-                                    ) : course.price === 0 ? (
-                                        <button
-                                            onClick={() => enroll(course.id)}
+                                            {status.label}
+                                        </span>
+
+                                        <h3
                                             style={{
-                                                padding: '8px 16px',
-                                                background:
-                                                    'rgba(16,185,129,0.1)',
-                                                border: '1px solid rgba(16,185,129,0.3)',
-                                                borderRadius: '6px',
-                                                color: '#10b981',
-                                                cursor: 'pointer',
-                                                fontSize: '12px',
-                                                fontWeight: '600',
+                                                fontFamily: 'var(--serif)',
+                                                fontWeight: '700',
+                                                fontSize: '24px',
+                                                lineHeight: '1.2',
+                                                color: 'var(--text)',
+                                                marginBottom: '8px',
                                             }}
                                         >
-                                            Записаться
-                                        </button>
-                                    ) : (
+                                            {c.title}
+                                        </h3>
+
+                                        {c.description && (
+                                            <p
+                                                style={{
+                                                    color: 'var(--text-muted)',
+                                                    fontSize: '14.5px',
+                                                    lineHeight: '1.55',
+                                                    marginBottom: '16px',
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden',
+                                                }}
+                                            >
+                                                {c.description}
+                                            </p>
+                                        )}
+
+                                        {c.total > 0 && (
+                                            <div style={{ marginBottom: '18px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                                                    <span style={{ color: 'var(--text-muted)' }}>
+                                                        {c.completed} из {c.total} уроков
+                                                    </span>
+                                                    <span style={{ color: 'var(--text)', fontWeight: '700' }}>{c.percent}%</span>
+                                                </div>
+                                                <div
+                                                    style={{
+                                                        height: '6px',
+                                                        borderRadius: '999px',
+                                                        background: 'rgba(111,163,224,0.18)',
+                                                        overflow: 'hidden',
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            width: `${c.percent}%`,
+                                                            height: '100%',
+                                                            background: 'var(--accent-soft)',
+                                                            borderRadius: '999px',
+                                                            transition: 'width 0.4s ease',
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <button
-                                            onClick={() => handleBuy(course)}
+                                            onClick={() => router.push(target)}
+                                            disabled={c.total === 0}
                                             style={{
-                                                padding: '8px 16px',
-                                                background:
-                                                    'rgba(245,158,11,0.1)',
-                                                border: '1px solid rgba(245,158,11,0.3)',
-                                                borderRadius: '6px',
-                                                color: '#f59e0b',
-                                                cursor: 'pointer',
-                                                fontSize: '12px',
-                                                fontWeight: '600',
+                                                marginTop: 'auto',
+                                                width: '100%',
+                                                padding: '15px',
+                                                borderRadius: '999px',
+                                                border: 'none',
+                                                background: c.total === 0 ? 'rgba(255,255,255,0.1)' : 'var(--accent)',
+                                                color: c.total === 0 ? 'var(--text-faint)' : 'var(--bg)',
+                                                fontSize: '15px',
+                                                fontWeight: '700',
+                                                fontFamily: 'var(--sans)',
+                                                cursor: c.total === 0 ? 'not-allowed' : 'pointer',
                                             }}
                                         >
-                                            Купить ${course.price}
+                                            {c.total === 0 ? 'Скоро' : btnLabel}
                                         </button>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                )}
+
+                <div style={{ textAlign: 'center', marginTop: '40px' }}>
+                    <button
+                        onClick={handleLogout}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-faint)',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontFamily: 'var(--sans)',
+                        }}
+                    >
+                        Выйти из аккаунта
+                    </button>
                 </div>
-            </div>
+            </main>
+
+            <BottomNav />
         </div>
     );
 }
