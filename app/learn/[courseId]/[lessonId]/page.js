@@ -7,8 +7,26 @@ import { useRouter, useParams } from 'next/navigation';
 import AppHeader from '../../../../components/AppHeader';
 import PdfViewer from '../../../../components/PdfViewer';
 
-const MAX_WIDTH = 720;
+const MAX_WIDTH = 1180;
 const STAFF = ['admin', 'superuser', 'owner'];
+
+const escapeHtml = (s) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const stripHtml = (html) =>
+    (html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+
+// старые уроки хранились как обычный текст, у них сохраняем абзацы
+const toHtml = (content) => {
+    const c = content || '';
+    if (/<[a-z][\s\S]*>/i.test(c)) return c;
+    return c
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => `<p>${escapeHtml(line)}</p>`)
+        .join('');
+};
 
 const pillSolid = {
     width: '100%',
@@ -34,20 +52,28 @@ const pillOutline = {
     fontFamily: 'var(--sans)',
     cursor: 'pointer',
 };
+const sectionHeading = {
+    fontFamily: 'var(--serif)',
+    fontWeight: '700',
+    fontSize: '26px',
+    color: 'var(--text)',
+    margin: 0,
+};
 
 export default function LessonPage() {
     const [lesson, setLesson] = useState(null);
     const [course, setCourse] = useState(null);
     const [user, setUser] = useState(null);
     const [profile, setProfile] = useState(null);
+    const [groups, setGroups] = useState([]);
+    const [completedIds, setCompletedIds] = useState(new Set());
     const [videoUrl, setVideoUrl] = useState(null);
+    const [videoFailed, setVideoFailed] = useState(false);
     const [presUrl, setPresUrl] = useState(null);
+    const [presFailed, setPresFailed] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [isTouch, setIsTouch] = useState(false);
-    const [activeTab, setActiveTab] = useState('notes');
-    const [lessonNo, setLessonNo] = useState(1);
-    const [nextLessonId, setNextLessonId] = useState(null);
-    const [completed, setCompleted] = useState(false);
+    const [activeTab, setActiveTab] = useState(null);
     const [saving, setSaving] = useState(false);
     const [notFound, setNotFound] = useState(false);
     const videoRef = useRef(null);
@@ -62,10 +88,11 @@ export default function LessonPage() {
         const init = async () => {
             setLesson(null);
             setVideoUrl(null);
+            setVideoFailed(false);
             setPresUrl(null);
-            setCompleted(false);
+            setPresFailed(false);
             setNotFound(false);
-            setActiveTab('notes');
+            setActiveTab(null);
 
             const {
                 data: { user },
@@ -98,7 +125,7 @@ export default function LessonPage() {
                 }
             }
 
-            const [lessonRes, courseRes, listRes, progRes] = await Promise.all([
+            const [lessonRes, courseRes, listRes, sectionsRes, progRes] = await Promise.all([
                 supabase
                     .from('lessons')
                     .select('*, lesson_files(*)')
@@ -107,47 +134,61 @@ export default function LessonPage() {
                 supabase.from('courses').select('*').eq('id', courseId).single(),
                 supabase
                     .from('lessons')
-                    .select('id, order_index, sections!inner(course_id, order_index)')
+                    .select('id, title, order_index, section_id, sections!inner(course_id)')
                     .eq('sections.course_id', courseId),
                 supabase
+                    .from('sections')
+                    .select('id, title, order_index')
+                    .eq('course_id', courseId)
+                    .order('order_index'),
+                supabase
                     .from('progress')
-                    .select('completed')
+                    .select('lesson_id')
                     .eq('user_id', user.id)
-                    .eq('lesson_id', lessonId)
-                    .maybeSingle(),
+                    .eq('completed', true),
             ]);
 
             if (cancelled) return;
 
-            const ordered = (listRes.data || [])
-                .map((l) => ({
-                    id: l.id,
-                    order: (l.sections?.order_index || 0) * 10000 + (l.order_index || 0),
-                }))
-                .sort((a, b) => a.order - b.order);
+            const allLessons = listRes.data || [];
+            let counter = 0;
+            const built = (sectionsRes.data || []).map((s) => ({
+                id: s.id,
+                title: s.title,
+                lessons: allLessons
+                    .filter((l) => l.section_id === s.id)
+                    .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+                    .map((l) => ({ id: l.id, title: l.title, number: ++counter })),
+            }));
 
-            const idx = ordered.findIndex((l) => l.id === lessonId);
+            const inCourse = built.some((g) => g.lessons.some((l) => l.id === lessonId));
 
             // урок должен принадлежать этому курсу
-            if (!lessonRes.data || idx === -1) {
+            if (!lessonRes.data || !inCourse) {
                 setNotFound(true);
                 return;
             }
 
-            setLessonNo(idx + 1);
-            setNextLessonId(ordered[idx + 1]?.id || null);
-            setCompleted(!!progRes.data?.completed);
+            setGroups(built);
+            setCompletedIds(new Set((progRes.data || []).map((p) => p.lesson_id)));
             setCourse(courseRes.data);
             setLesson(lessonRes.data);
 
             if (lessonRes.data.hls_key) {
-                const res = await fetch('/api/video-url', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: lessonRes.data.hls_key }),
-                });
-                const data = await res.json();
-                if (!cancelled && data.url) setVideoUrl(data.url);
+                try {
+                    const res = await fetch('/api/video-url', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: lessonRes.data.hls_key }),
+                    });
+                    const data = await res.json();
+                    if (!cancelled) {
+                        if (data.url) setVideoUrl(data.url);
+                        else setVideoFailed(true);
+                    }
+                } catch {
+                    if (!cancelled) setVideoFailed(true);
+                }
             }
         };
 
@@ -196,24 +237,31 @@ export default function LessonPage() {
 
     useEffect(() => {
         if (!lesson) return;
+        setPresUrl(null);
+        setPresFailed(false);
+
         const key = isMobile
             ? lesson.presentation_mobile_key || lesson.presentation_desktop_key
             : lesson.presentation_desktop_key || lesson.presentation_mobile_key;
 
-        if (!key) {
-            setPresUrl(null);
-            return;
-        }
+        if (!key) return;
 
         let cancelled = false;
         (async () => {
-            const res = await fetch('/api/video-url', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key }),
-            });
-            const data = await res.json();
-            if (!cancelled && data.url) setPresUrl(data.url);
+            try {
+                const res = await fetch('/api/video-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key }),
+                });
+                const data = await res.json();
+                if (!cancelled) {
+                    if (data.url) setPresUrl(data.url);
+                    else setPresFailed(true);
+                }
+            } catch {
+                if (!cancelled) setPresFailed(true);
+            }
         })();
 
         return () => {
@@ -222,7 +270,7 @@ export default function LessonPage() {
     }, [lesson, isMobile]);
 
     const markComplete = async () => {
-        if (saving || completed) return;
+        if (saving || completedIds.has(lessonId)) return;
         setSaving(true);
         const { error } = await supabase.from('progress').upsert(
             {
@@ -238,7 +286,11 @@ export default function LessonPage() {
             alert('Ошибка: ' + error.message);
             return;
         }
-        setCompleted(true);
+        setCompletedIds((prev) => {
+            const next = new Set(prev);
+            next.add(lessonId);
+            return next;
+        });
     };
 
     const downloadFile = async (key) => {
@@ -290,12 +342,28 @@ export default function LessonPage() {
             </div>
         );
 
-    const hasFiles = lesson.lesson_files?.length > 0;
-    const tabs = [
-        { id: 'notes', label: 'Конспект' },
-        ...(presUrl ? [{ id: 'presentation', label: 'Презентация' }] : []),
-        ...(hasFiles ? [{ id: 'files', label: 'Файлы' }] : []),
-    ];
+    // что реально загружено в этом уроке
+    const hasVideo = !!lesson.hls_key;
+    const hasNotes = stripHtml(lesson.content).length > 0;
+    const hasPresentation = !!(lesson.presentation_desktop_key || lesson.presentation_mobile_key);
+    const hasFiles = (lesson.lesson_files?.length || 0) > 0;
+    const nothing = !hasVideo && !hasNotes && !hasPresentation && !hasFiles;
+
+    const tabs = [];
+    if (hasNotes) tabs.push({ id: 'notes', label: 'Конспект', icon: '📝' });
+    if (hasPresentation) tabs.push({ id: 'presentation', label: 'Презентация', icon: '📊' });
+    if (hasFiles) tabs.push({ id: 'files', label: 'Файлы', icon: '📎' });
+
+    const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : tabs[0]?.id;
+    const gap = hasVideo || tabs.length > 1 ? '26px' : '0px';
+
+    const flat = groups.flatMap((g) => g.lessons);
+    const idx = flat.findIndex((l) => l.id === lessonId);
+    const lessonNo = idx + 1;
+    const nextLessonId = flat[idx + 1]?.id || null;
+    const completed = completedIds.has(lessonId);
+    const doneCount = flat.filter((l) => completedIds.has(l.id)).length;
+    const percent = flat.length > 0 ? Math.round((doneCount / flat.length) * 100) : 0;
 
     const words = (lesson.title || '').trim().split(/\s+/);
     const titleHead = words.length > 1 ? words.slice(0, -1).join(' ') : '';
@@ -304,6 +372,12 @@ export default function LessonPage() {
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)', paddingBottom: '60px' }}>
             <style>{`
+                .lesson-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 36px; }
+                .lesson-side { display: none; }
+                @media (min-width: 1024px) {
+                    .lesson-grid { grid-template-columns: minmax(0, 1fr) 340px; gap: 44px; align-items: start; }
+                    .lesson-side { display: block; position: sticky; top: 88px; max-height: calc(100vh - 112px); overflow-y: auto; }
+                }
                 .lesson-rich { color: var(--text-muted); font-size: 16px; line-height: 1.75; user-select: none; }
                 .lesson-rich h2 { font-family: var(--serif); font-weight: 700; color: var(--text); font-size: 26px; line-height: 1.2; letter-spacing: -0.3px; margin: 0 0 12px; }
                 .lesson-rich h2:not(:first-child) { margin-top: 30px; }
@@ -320,314 +394,468 @@ export default function LessonPage() {
             <AppHeader initial={initial} maxWidth={MAX_WIDTH} />
 
             <main style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '26px 20px 0' }}>
-                <button
-                    onClick={() => router.push(`/learn/${courseId}`)}
-                    style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        color: 'var(--accent-soft)',
-                        fontSize: '14px',
-                        fontWeight: '700',
-                        fontFamily: 'var(--sans)',
-                        cursor: 'pointer',
-                        marginBottom: '26px',
-                    }}
-                >
-                    ← К программе курса
-                </button>
-
-                <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '14px', marginBottom: '10px' }}>
-                    Урок {String(lessonNo).padStart(2, '0')}
-                </p>
-
-                <h1
-                    style={{
-                        fontFamily: 'var(--serif)',
-                        fontWeight: '800',
-                        fontSize: 'clamp(34px, 9vw, 48px)',
-                        lineHeight: '1.08',
-                        letterSpacing: '-1px',
-                        color: 'var(--text)',
-                        marginBottom: '24px',
-                    }}
-                >
-                    {titleHead && <>{titleHead} </>}
-                    {titleHead ? (
-                        <em style={{ fontStyle: 'italic', color: 'var(--accent-soft)', fontWeight: '500' }}>
-                            {titleTail}
-                        </em>
-                    ) : (
-                        titleTail
-                    )}
-                </h1>
-
-                {/* Видео */}
-                {videoUrl ? (
-                    <div
-                        style={{
-                            position: 'relative',
-                            width: 'min(100%, 818px)',
-                            aspectRatio: '16 / 9',
-                            margin: '0 auto',
-                            borderRadius: '22px',
-                            overflow: 'hidden',
-                            background: '#000',
-                        }}
-                    >
-                        <div data-vjs-player style={{ width: '100%', height: '100%' }}>
-                            <video ref={videoRef} className="video-js vjs-big-play-centered" />
-                        </div>
-                        <div
+                <div className="lesson-grid">
+                    {/* Основная колонка */}
+                    <div style={{ minWidth: 0 }}>
+                        <button
+                            onClick={() => router.push(`/learn/${courseId}`)}
                             style={{
-                                position: 'absolute',
-                                top: '12px',
-                                right: '12px',
-                                color: 'rgba(255,255,255,0.3)',
-                                fontSize: '11px',
-                                pointerEvents: 'none',
-                                userSelect: 'none',
-                                zIndex: 10,
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                color: 'var(--accent-soft)',
+                                fontSize: '14px',
+                                fontWeight: '700',
+                                fontFamily: 'var(--sans)',
+                                cursor: 'pointer',
+                                marginBottom: '26px',
                             }}
                         >
-                            {profile?.login || user?.email}
-                        </div>
-                    </div>
-                ) : (
-                    <div
-                        style={{
-                            width: '100%',
-                            aspectRatio: '16 / 9',
-                            borderRadius: '22px',
-                            background: '#143560',
-                            border: '1px solid var(--border)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '16px',
-                            padding: '20px',
-                            textAlign: 'center',
-                        }}
-                    >
-                        <div
-                            style={{
-                                width: '64px',
-                                height: '64px',
-                                borderRadius: '50%',
-                                background: 'var(--accent)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
-                        >
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--bg)">
-                                <path d="M8 5v14l11-7z" />
-                            </svg>
-                        </div>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-                            Видео для этого урока ещё не загружено
+                            ← К программе курса
+                        </button>
+
+                        <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '14px', marginBottom: '10px' }}>
+                            Урок {String(lessonNo).padStart(2, '0')}
                         </p>
-                    </div>
-                )}
 
-                {/* Вкладки */}
-                <div
-                    style={{
-                        display: 'flex',
-                        overflowX: 'auto',
-                        borderBottom: '1px solid var(--border-soft)',
-                        marginTop: '30px',
-                    }}
-                >
-                    {tabs.map((t) => {
-                        const active = activeTab === t.id;
-                        return (
-                            <button
-                                key={t.id}
-                                onClick={() => setActiveTab(t.id)}
-                                style={{
-                                    padding: '12px 2px',
-                                    marginRight: '26px',
-                                    background: 'transparent',
-                                    border: 'none',
-                                    borderBottom: active
-                                        ? '2px solid var(--accent-soft)'
-                                        : '2px solid transparent',
-                                    marginBottom: '-1px',
-                                    color: active ? 'var(--text)' : 'var(--text-muted)',
-                                    fontSize: '15px',
-                                    fontWeight: active ? '700' : '600',
-                                    fontFamily: 'var(--sans)',
-                                    cursor: 'pointer',
-                                    whiteSpace: 'nowrap',
-                                }}
-                            >
-                                {t.label}
-                            </button>
-                        );
-                    })}
-                </div>
+                        <h1
+                            style={{
+                                fontFamily: 'var(--serif)',
+                                fontWeight: '800',
+                                fontSize: 'clamp(32px, 6vw, 46px)',
+                                lineHeight: '1.08',
+                                letterSpacing: '-1px',
+                                color: 'var(--text)',
+                                marginBottom: '24px',
+                            }}
+                        >
+                            {titleHead && <>{titleHead} </>}
+                            {titleHead ? (
+                                <em style={{ fontStyle: 'italic', color: 'var(--accent-soft)', fontWeight: '500' }}>
+                                    {titleTail}
+                                </em>
+                            ) : (
+                                titleTail
+                            )}
+                        </h1>
 
-                {/* Конспект */}
-                {activeTab === 'notes' && (
-                    <div style={{ padding: '26px 0 6px' }}>
-                        {lesson.content ? (
-                            <div
-                                className="lesson-rich"
-                                dangerouslySetInnerHTML={{ __html: lesson.content }}
-                            />
-                        ) : (
-                            <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
-                                Конспект для этого урока ещё не добавлен
-                            </p>
-                        )}
-                    </div>
-                )}
-
-                {/* Презентация */}
-                {activeTab === 'presentation' && presUrl && (
-                    <div style={{ padding: '22px 0 6px' }}>
-                        {!showCanvasPdf && (
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
-                                <button
-                                    onClick={() => window.open(presUrl, '_blank')}
+                        {/* Видео (только если загружено) */}
+                        {hasVideo &&
+                            (videoUrl ? (
+                                <div
                                     style={{
-                                        padding: '9px 16px',
-                                        background: 'transparent',
-                                        border: '1.5px solid rgba(111,163,224,0.5)',
-                                        borderRadius: '999px',
-                                        color: 'var(--accent-soft)',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: '700',
-                                        fontFamily: 'var(--sans)',
+                                        position: 'relative',
+                                        width: '100%',
+                                        aspectRatio: '16 / 9',
+                                        maxHeight: '70vh',
+                                        borderRadius: '22px',
+                                        overflow: 'hidden',
+                                        background: '#000',
                                     }}
                                 >
-                                    Открыть на весь экран
-                                </button>
+                                    <div data-vjs-player style={{ width: '100%', height: '100%' }}>
+                                        <video ref={videoRef} className="video-js vjs-big-play-centered" />
+                                    </div>
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            top: '12px',
+                                            right: '12px',
+                                            color: 'rgba(255,255,255,0.3)',
+                                            fontSize: '11px',
+                                            pointerEvents: 'none',
+                                            userSelect: 'none',
+                                            zIndex: 10,
+                                        }}
+                                    >
+                                        {profile?.login || user?.email}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        aspectRatio: '16 / 9',
+                                        maxHeight: '70vh',
+                                        borderRadius: '22px',
+                                        background: '#143560',
+                                        border: '1px solid var(--border)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '20px',
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                                        {videoFailed ? 'Не удалось загрузить видео' : 'Загрузка видео...'}
+                                    </p>
+                                </div>
+                            ))}
+
+                        {/* В уроке ещё ничего нет */}
+                        {nothing && (
+                            <div
+                                style={{
+                                    padding: '28px 22px',
+                                    borderRadius: '22px',
+                                    background: 'var(--card-bg)',
+                                    border: '1px solid var(--border)',
+                                }}
+                            >
+                                <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
+                                    Материалы урока ещё не добавлены.
+                                </p>
                             </div>
                         )}
-                        {showCanvasPdf ? (
-                            <PdfViewer url={presUrl} />
-                        ) : (
-                            <iframe
-                                src={`${presUrl}#toolbar=0`}
-                                style={{
-                                    width: '100%',
-                                    height: '80vh',
-                                    border: 'none',
-                                    borderRadius: '14px',
-                                    background: '#fff',
-                                }}
-                            />
-                        )}
-                    </div>
-                )}
 
-                {/* Файлы */}
-                {activeTab === 'files' && hasFiles && (
-                    <div style={{ padding: '22px 0 6px' }}>
-                        {lesson.lesson_files.map((f) => (
+                        {/* Вкладки: только если разделов два и больше */}
+                        {tabs.length > 1 && (
                             <div
-                                key={f.id}
                                 style={{
                                     display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    flexWrap: 'wrap',
                                     gap: '10px',
-                                    padding: '16px 0',
-                                    borderBottom: '1px solid var(--border-soft)',
+                                    flexWrap: 'wrap',
+                                    marginTop: hasVideo ? '28px' : '0',
                                 }}
                             >
-                                <span style={{ color: 'var(--text)', fontSize: '15px' }}>📎 {f.name}</span>
-                                <button
-                                    onClick={() => downloadFile(f.file_key)}
+                                {tabs.map((t) => {
+                                    const active = currentTab === t.id;
+                                    return (
+                                        <button
+                                            key={t.id}
+                                            onClick={() => setActiveTab(t.id)}
+                                            style={{
+                                                flex: '1 1 140px',
+                                                padding: '15px 20px',
+                                                borderRadius: '999px',
+                                                border: active
+                                                    ? '1.5px solid var(--accent)'
+                                                    : '1.5px solid rgba(111,163,224,0.4)',
+                                                background: active ? 'var(--accent)' : 'transparent',
+                                                color: active ? 'var(--bg)' : 'var(--text)',
+                                                fontSize: '16px',
+                                                fontWeight: '700',
+                                                fontFamily: 'var(--sans)',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {t.icon} {t.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Конспект */}
+                        {currentTab === 'notes' && (
+                            <div style={{ paddingTop: gap }}>
+                                <div
+                                    className="lesson-rich"
+                                    dangerouslySetInnerHTML={{ __html: toHtml(lesson.content) }}
+                                />
+                            </div>
+                        )}
+
+                        {/* Презентация */}
+                        {currentTab === 'presentation' && (
+                            <div style={{ paddingTop: gap }}>
+                                <div
                                     style={{
-                                        padding: '9px 18px',
-                                        background: 'transparent',
-                                        border: '1.5px solid rgba(111,163,224,0.5)',
-                                        borderRadius: '999px',
-                                        color: 'var(--accent-soft)',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: '700',
-                                        fontFamily: 'var(--sans)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
+                                        flexWrap: 'wrap',
+                                        marginBottom: '14px',
                                     }}
                                 >
-                                    Скачать
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                                    {tabs.length === 1 && <h2 style={sectionHeading}>📊 Презентация</h2>}
+                                    {presUrl && !showCanvasPdf && (
+                                        <button
+                                            onClick={() => window.open(presUrl, '_blank')}
+                                            style={{
+                                                marginLeft: 'auto',
+                                                padding: '9px 16px',
+                                                background: 'transparent',
+                                                border: '1.5px solid rgba(111,163,224,0.5)',
+                                                borderRadius: '999px',
+                                                color: 'var(--accent-soft)',
+                                                cursor: 'pointer',
+                                                fontSize: '13px',
+                                                fontWeight: '700',
+                                                fontFamily: 'var(--sans)',
+                                            }}
+                                        >
+                                            Открыть на весь экран
+                                        </button>
+                                    )}
+                                </div>
 
-                {/* Есть вопрос? */}
-                {CURATOR_LINK && (
-                    <div
-                        style={{
-                            marginTop: '30px',
-                            padding: '24px 22px',
-                            borderRadius: '22px',
-                            background: 'var(--card-bg)',
-                            border: '1px solid var(--border)',
-                        }}
-                    >
-                        <p style={{ fontFamily: 'var(--serif)', fontWeight: '700', fontSize: '24px', color: 'var(--text)', marginBottom: '8px' }}>
-                            Есть вопрос?
-                        </p>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '14.5px', lineHeight: '1.55', marginBottom: '18px' }}>
-                            Личный куратор отвечает по делу, а не отправляет «гуглить самому».
-                        </p>
-                        <a
-                            href={CURATOR_LINK}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                                {presUrl ? (
+                                    showCanvasPdf ? (
+                                        <PdfViewer url={presUrl} />
+                                    ) : (
+                                        <iframe
+                                            src={`${presUrl}#toolbar=0`}
+                                            style={{
+                                                width: '100%',
+                                                height: '80vh',
+                                                border: 'none',
+                                                borderRadius: '14px',
+                                                background: '#fff',
+                                            }}
+                                        />
+                                    )
+                                ) : (
+                                    <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                                        {presFailed ? 'Не удалось загрузить презентацию' : 'Загрузка презентации...'}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Файлы */}
+                        {currentTab === 'files' && (
+                            <div style={{ paddingTop: gap }}>
+                                {tabs.length === 1 && (
+                                    <h2 style={{ ...sectionHeading, marginBottom: '14px' }}>📎 Файлы урока</h2>
+                                )}
+                                {lesson.lesson_files.map((f) => (
+                                    <div
+                                        key={f.id}
+                                        style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            flexWrap: 'wrap',
+                                            gap: '10px',
+                                            padding: '16px 0',
+                                            borderBottom: '1px solid var(--border-soft)',
+                                        }}
+                                    >
+                                        <span style={{ color: 'var(--text)', fontSize: '15px' }}>📎 {f.name}</span>
+                                        <button
+                                            onClick={() => downloadFile(f.file_key)}
+                                            style={{
+                                                padding: '9px 18px',
+                                                background: 'transparent',
+                                                border: '1.5px solid rgba(111,163,224,0.5)',
+                                                borderRadius: '999px',
+                                                color: 'var(--accent-soft)',
+                                                cursor: 'pointer',
+                                                fontSize: '13px',
+                                                fontWeight: '700',
+                                                fontFamily: 'var(--sans)',
+                                            }}
+                                        >
+                                            Скачать
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Есть вопрос? */}
+                        {CURATOR_LINK && (
+                            <div
+                                style={{
+                                    marginTop: '32px',
+                                    padding: '24px 22px',
+                                    borderRadius: '22px',
+                                    background: 'var(--card-bg)',
+                                    border: '1px solid var(--border)',
+                                }}
+                            >
+                                <p style={{ fontFamily: 'var(--serif)', fontWeight: '700', fontSize: '24px', color: 'var(--text)', marginBottom: '8px' }}>
+                                    Есть вопрос?
+                                </p>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '14.5px', lineHeight: '1.55', marginBottom: '18px' }}>
+                                    Личный куратор отвечает по делу, а не отправляет «гуглить самому».
+                                </p>
+                                <a
+                                    href={CURATOR_LINK}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        ...pillSolid,
+                                        display: 'block',
+                                        textAlign: 'center',
+                                        textDecoration: 'none',
+                                        boxSizing: 'border-box',
+                                    }}
+                                >
+                                    Написать куратору
+                                </a>
+                            </div>
+                        )}
+
+                        {/* Действия */}
+                        <div style={{ marginTop: '28px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            <button
+                                onClick={markComplete}
+                                disabled={saving || completed}
+                                style={{
+                                    ...(completed
+                                        ? {
+                                              ...pillSolid,
+                                              background: 'rgba(111,163,224,0.16)',
+                                              color: 'var(--text)',
+                                              cursor: 'default',
+                                          }
+                                        : { ...pillSolid, opacity: saving ? 0.6 : 1 }),
+                                    flex: '1 1 260px',
+                                    width: 'auto',
+                                }}
+                            >
+                                {completed ? '✓ Урок пройден' : saving ? 'Сохраняю...' : 'Отметить пройденным'}
+                            </button>
+
+                            <button
+                                onClick={() =>
+                                    router.push(
+                                        nextLessonId
+                                            ? `/learn/${courseId}/${nextLessonId}`
+                                            : `/learn/${courseId}`,
+                                    )
+                                }
+                                style={{ ...pillOutline, flex: '1 1 260px', width: 'auto' }}
+                            >
+                                {nextLessonId ? 'Следующий урок →' : 'К программе курса'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Боковая панель с программой (только на широких экранах) */}
+                    <aside className="lesson-side">
+                        <div
                             style={{
-                                ...pillSolid,
-                                display: 'block',
-                                textAlign: 'center',
-                                textDecoration: 'none',
-                                boxSizing: 'border-box',
+                                padding: '20px 18px',
+                                borderRadius: '22px',
+                                background: 'var(--card-bg)',
+                                border: '1px solid var(--border)',
                             }}
                         >
-                            Написать куратору
-                        </a>
-                    </div>
-                )}
+                            <p style={{ fontFamily: 'var(--serif)', fontWeight: '700', fontSize: '20px', color: 'var(--text)', marginBottom: '4px' }}>
+                                Программа курса
+                            </p>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '12px' }}>
+                                {course?.title}
+                            </p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '8px' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>
+                                    {doneCount} из {flat.length} уроков
+                                </span>
+                                <span style={{ color: 'var(--text)', fontWeight: '700' }}>{percent}%</span>
+                            </div>
+                            <div
+                                style={{
+                                    height: '5px',
+                                    borderRadius: '999px',
+                                    background: 'rgba(111,163,224,0.18)',
+                                    overflow: 'hidden',
+                                    marginBottom: '8px',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        width: `${percent}%`,
+                                        height: '100%',
+                                        background: 'var(--accent-soft)',
+                                        borderRadius: '999px',
+                                        transition: 'width 0.4s ease',
+                                    }}
+                                />
+                            </div>
 
-                {/* Действия */}
-                <div style={{ marginTop: '28px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <button
-                        onClick={markComplete}
-                        disabled={saving || completed}
-                        style={
-                            completed
-                                ? {
-                                      ...pillSolid,
-                                      background: 'rgba(111,163,224,0.16)',
-                                      color: 'var(--text)',
-                                      cursor: 'default',
-                                  }
-                                : { ...pillSolid, opacity: saving ? 0.6 : 1 }
-                        }
-                    >
-                        {completed ? '✓ Урок пройден' : saving ? 'Сохраняю...' : 'Отметить пройденным'}
-                    </button>
-
-                    <button
-                        onClick={() =>
-                            router.push(
-                                nextLessonId
-                                    ? `/learn/${courseId}/${nextLessonId}`
-                                    : `/learn/${courseId}`,
-                            )
-                        }
-                        style={pillOutline}
-                    >
-                        {nextLessonId ? 'Следующий урок →' : 'К программе курса'}
-                    </button>
+                            {groups
+                                .filter((g) => g.lessons.length > 0)
+                                .map((g) => (
+                                    <div key={g.id} style={{ marginTop: '18px' }}>
+                                        <p
+                                            style={{
+                                                color: 'var(--accent-soft)',
+                                                fontSize: '11px',
+                                                fontWeight: '700',
+                                                letterSpacing: '1.5px',
+                                                textTransform: 'uppercase',
+                                                marginBottom: '6px',
+                                                padding: '0 10px',
+                                            }}
+                                        >
+                                            {g.title}
+                                        </p>
+                                        {g.lessons.map((l) => {
+                                            const isCurrent = l.id === lessonId;
+                                            const done = completedIds.has(l.id);
+                                            return (
+                                                <button
+                                                    key={l.id}
+                                                    onClick={() => router.push(`/learn/${courseId}/${l.id}`)}
+                                                    style={{
+                                                        width: '100%',
+                                                        display: 'flex',
+                                                        alignItems: 'flex-start',
+                                                        gap: '10px',
+                                                        padding: '10px',
+                                                        borderRadius: '12px',
+                                                        background: isCurrent ? 'rgba(111,163,224,0.16)' : 'transparent',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        textAlign: 'left',
+                                                        fontFamily: 'var(--sans)',
+                                                    }}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            flex: 'none',
+                                                            width: '22px',
+                                                            fontFamily: 'var(--serif)',
+                                                            fontWeight: '700',
+                                                            fontSize: '15px',
+                                                            lineHeight: '1.4',
+                                                            color: 'var(--accent-soft)',
+                                                        }}
+                                                    >
+                                                        {l.number}
+                                                    </span>
+                                                    <span
+                                                        style={{
+                                                            flex: 1,
+                                                            fontSize: '14px',
+                                                            lineHeight: '1.4',
+                                                            fontWeight: isCurrent ? '700' : '500',
+                                                            color: isCurrent ? 'var(--text)' : 'var(--text-muted)',
+                                                        }}
+                                                    >
+                                                        {l.title}
+                                                    </span>
+                                                    {done && (
+                                                        <span
+                                                            style={{
+                                                                flex: 'none',
+                                                                width: '18px',
+                                                                height: '18px',
+                                                                borderRadius: '50%',
+                                                                background: 'var(--accent-soft)',
+                                                                color: 'var(--bg)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                fontSize: '11px',
+                                                                fontWeight: '800',
+                                                                marginTop: '2px',
+                                                            }}
+                                                        >
+                                                            ✓
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ))}
+                        </div>
+                    </aside>
                 </div>
             </main>
         </div>
