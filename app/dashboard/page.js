@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import AppHeader from '../../components/AppHeader';
 import BottomNav from '../../components/BottomNav';
 
-const MAX_WIDTH = 720;
+const MAX_WIDTH = 1180;
 const STAFF = ['admin', 'superuser', 'owner'];
 
 const ACTIONS = [
