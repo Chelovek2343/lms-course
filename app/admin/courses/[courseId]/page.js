@@ -77,6 +77,8 @@ export default function CourseEditorPage() {
     const [uploadingLesson, setUploadingLesson] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadingPres, setUploadingPres] = useState(null);
+    const [editing, setEditing] = useState(null); // { type: 'section' | 'lesson', id, value }
+    const [renameBusy, setRenameBusy] = useState(false);
     const router = useRouter();
     const { courseId } = useParams();
     const supabase = createClient();
@@ -170,6 +172,42 @@ export default function CourseEditorPage() {
 
     const deleteSection = async (id) => {
         await supabase.from('sections').delete().eq('id', id);
+        loadData();
+    };
+
+    const startRename = (type, id, current) => {
+        setEditing({ type, id, value: current || '' });
+    };
+
+    const cancelRename = () => setEditing(null);
+
+    const saveRename = async () => {
+        if (!editing) return;
+        const value = editing.value.trim();
+        if (!value) {
+            alert('Название не может быть пустым');
+            return;
+        }
+
+        setRenameBusy(true);
+        const table = editing.type === 'section' ? 'sections' : 'lessons';
+        const { data, error } = await supabase
+            .from(table)
+            .update({ title: value })
+            .eq('id', editing.id)
+            .select('id');
+        setRenameBusy(false);
+
+        if (error) {
+            alert('Ошибка: ' + error.message);
+            return;
+        }
+        if (!data || data.length === 0) {
+            alert('Не удалось сохранить: нет прав или запись не найдена');
+            return;
+        }
+
+        setEditing(null);
         loadData();
     };
 
@@ -382,7 +420,56 @@ export default function CourseEditorPage() {
         fontWeight: '600',
     });
 
-       if (!course)
+    // название с кнопкой «Переименовать» (для секций и уроков)
+    const titleEditor = (type, id, title, prefix, textStyle) => {
+        const isEditing = editing && editing.type === type && editing.id === id;
+
+        if (isEditing) {
+            return (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', flex: 1, minWidth: '220px' }}>
+                    <input
+                        autoFocus
+                        value={editing.value}
+                        onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveRename();
+                            if (e.key === 'Escape') cancelRename();
+                        }}
+                        style={{ ...inputStyle, flex: 1, minWidth: '160px' }}
+                    />
+                    <button onClick={saveRename} disabled={renameBusy} style={btnStyle('16,185,129')}>
+                        {renameBusy ? '...' : 'Сохранить'}
+                    </button>
+                    <button onClick={cancelRename} style={btnStyle('148,163,184')}>
+                        Отмена
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                <span style={textStyle}>{prefix} {title}</span>
+                <button
+                    onClick={() => startRename(type, id, title)}
+                    title="Переименовать"
+                    style={{
+                        padding: '4px 8px',
+                        background: 'transparent',
+                        border: '1px solid #1e2433',
+                        borderRadius: '6px',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                    }}
+                >
+                    ✏️ Переименовать
+                </button>
+            </div>
+        );
+    };
+
+    if (!course)
         return (
             <div
                 style={{
@@ -506,12 +593,12 @@ export default function CourseEditorPage() {
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                             marginBottom: '10px', flexWrap: 'wrap', gap: '8px'
                         }}>
-                            <h3 style={{
-                                color: '#94a3b8', fontSize: '11px',
-                                letterSpacing: '2px', textTransform: 'uppercase'
-                            }}>
-                                📂 {section.title}
-                            </h3>
+                            {titleEditor('section', section.id, section.title, '📂', {
+                                color: '#94a3b8',
+                                fontSize: '11px',
+                                letterSpacing: '2px',
+                                textTransform: 'uppercase',
+                            })}
                             <button onClick={() => deleteSection(section.id)} style={{
                                 padding: '6px 10px', background: 'rgba(239,68,68,0.1)',
                                 border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px',
@@ -532,9 +619,13 @@ export default function CourseEditorPage() {
                                         alignItems: 'center', marginBottom: '10px',
                                         flexWrap: 'wrap', gap: '8px'
                                     }}>
-                                        <span style={{ color: '#fff', fontSize: '13px' }}>
-                                            {lesson.hls_key ? '🎬' : '📄'} {lesson.title}
-                                        </span>
+                                        {titleEditor(
+                                            'lesson',
+                                            lesson.id,
+                                            lesson.title,
+                                            lesson.hls_key ? '🎬' : '📄',
+                                            { color: '#fff', fontSize: '13px' },
+                                        )}
                                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             {lesson.hls_key && (
                                                 <span style={{ color: '#10b981', fontSize: '11px' }}>✓ Видео</span>
@@ -579,7 +670,6 @@ export default function CourseEditorPage() {
                                     )}
 
                                     {/* Текст урока */}
-                                                                        {/* Текст урока */}
                                     <div style={{ marginTop: '12px' }}>
                                         <label style={{ color: '#64748b', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
                                             ТЕКСТ УРОКА
@@ -590,7 +680,7 @@ export default function CourseEditorPage() {
                                         />
                                     </div>
 
-                                    {/* Файлы */}
+                                    {/* Презентации */}
                                     {presentationSlot(lesson, 'desktop', '🖥 ПРЕЗЕНТАЦИЯ ДЛЯ ПК')}
                                     {presentationSlot(lesson, 'mobile', '📱 ПРЕЗЕНТАЦИЯ ДЛЯ ТЕЛЕФОНА')}
                                 </div>
