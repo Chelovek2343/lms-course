@@ -131,7 +131,7 @@ export default function DashboardPage() {
                     Курсы, пользователи и доступ студентов платформы.
                 </p>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
                     {ACTIONS.map((a) => (
                         <button
                             key={a.href}
