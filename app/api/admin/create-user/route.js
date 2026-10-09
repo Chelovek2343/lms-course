@@ -42,7 +42,6 @@ export async function POST(request) {
         }
 
         let login = generateLogin()
-        // на всякий случай проверяем уникальность логина
         for (let i = 0; i < 5; i++) {
             const { data: existing } = await supabaseAdmin
                 .from('profiles')
@@ -66,13 +65,41 @@ export async function POST(request) {
             return Response.json({ error: error.message }, { status: 400 })
         }
 
-        // прописываем логин в профиль (email/role уже заполнил триггер handle_new_user)
         await supabaseAdmin
             .from('profiles')
             .update({ login })
             .eq('id', created.user.id)
 
-        return Response.json({ success: true, login, password })
+        // автоматически открываем студенту все опубликованные курсы
+        let enrolled = 0
+        let enrollWarning = null
+
+        const { data: courses, error: coursesError } = await supabaseAdmin
+            .from('courses')
+            .select('id')
+            .eq('is_published', true)
+
+        if (coursesError) {
+            enrollWarning = 'Аккаунт создан, но не удалось получить список курсов: ' + coursesError.message
+        } else if (!courses || courses.length === 0) {
+            enrollWarning = 'Нет опубликованных курсов, поэтому доступ пока не открыт.'
+        } else {
+            const rows = courses.map((c) => ({
+                user_id: created.user.id,
+                course_id: c.id,
+            }))
+            const { error: enrollError } = await supabaseAdmin
+                .from('enrollments')
+                .upsert(rows, { onConflict: 'user_id,course_id', ignoreDuplicates: true })
+
+            if (enrollError) {
+                enrollWarning = 'Аккаунт создан, но доступ к курсам не открылся: ' + enrollError.message
+            } else {
+                enrolled = rows.length
+            }
+        }
+
+        return Response.json({ success: true, login, password, enrolled, enrollWarning })
     } catch (error) {
         return Response.json({ error: error.message }, { status: 500 })
     }
