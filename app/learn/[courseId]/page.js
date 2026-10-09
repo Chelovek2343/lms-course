@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import AppHeader from '../../../components/AppHeader';
 import BottomNav from '../../../components/BottomNav';
 
-const MAX_WIDTH = 720;
+const MAX_WIDTH = 1180;
 const STAFF = ['admin', 'superuser', 'owner'];
 
 export default function CoursePage() {
@@ -126,7 +126,7 @@ export default function CoursePage() {
                         Курс не найден
                     </h1>
                     <button
-                        onClick={() => router.push('/dashboard')}
+                        onClick={() => router.push('/courses')}
                         style={{
                             padding: '14px 26px',
                             borderRadius: '999px',
@@ -166,11 +166,20 @@ export default function CoursePage() {
 
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)', paddingBottom: '100px' }}>
+            <style>{`
+                .course-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+                .course-aside { order: -1; }
+                @media (min-width: 960px) {
+                    .course-grid { grid-template-columns: minmax(0, 1fr) 340px; gap: 48px; align-items: start; }
+                    .course-aside { order: 0; position: sticky; top: 88px; }
+                }
+            `}</style>
+
             <AppHeader initial={initial} maxWidth={MAX_WIDTH} />
 
             <main style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '26px 20px 0' }}>
                 <button
-                    onClick={() => router.push('/dashboard')}
+                    onClick={() => router.push('/courses')}
                     style={{
                         background: 'none',
                         border: 'none',
@@ -194,7 +203,7 @@ export default function CoursePage() {
                     style={{
                         fontFamily: 'var(--serif)',
                         fontWeight: '800',
-                        fontSize: 'clamp(34px, 9vw, 48px)',
+                        fontSize: 'clamp(34px, 7vw, 52px)',
                         lineHeight: '1.08',
                         letterSpacing: '-1px',
                         color: 'var(--text)',
@@ -212,171 +221,175 @@ export default function CoursePage() {
                 </h1>
 
                 {course.description && (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.6', maxWidth: '46ch' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.6', maxWidth: '60ch' }}>
                         {course.description}
                     </p>
                 )}
 
-                {/* Прогресс */}
-                {total > 0 && (
-                    <div
-                        style={{
-                            marginTop: '28px',
-                            padding: '22px',
-                            borderRadius: '22px',
-                            background: 'var(--card-bg)',
-                            border: '1px solid var(--border)',
-                        }}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '10px' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>
-                                {completedCount} из {total} уроков
-                            </span>
-                            <span style={{ color: 'var(--text)', fontWeight: '700' }}>{percent}%</span>
-                        </div>
-                        <div
-                            style={{
-                                height: '6px',
-                                borderRadius: '999px',
-                                background: 'rgba(111,163,224,0.18)',
-                                overflow: 'hidden',
-                                marginBottom: '18px',
-                            }}
-                        >
+                <div className="course-grid" style={{ marginTop: '28px' }}>
+                    {/* Уроки */}
+                    <div style={{ minWidth: 0 }}>
+                        {total === 0 && (
                             <div
                                 style={{
-                                    width: `${percent}%`,
-                                    height: '100%',
-                                    background: 'var(--accent-soft)',
-                                    borderRadius: '999px',
-                                    transition: 'width 0.4s ease',
-                                }}
-                            />
-                        </div>
-                        <button
-                            onClick={() => ctaTarget && router.push(`/learn/${courseId}/${ctaTarget}`)}
-                            style={{
-                                width: '100%',
-                                padding: '15px',
-                                borderRadius: '999px',
-                                border: 'none',
-                                background: 'var(--accent)',
-                                color: 'var(--bg)',
-                                fontSize: '15px',
-                                fontWeight: '700',
-                                fontFamily: 'var(--sans)',
-                                cursor: 'pointer',
-                            }}
-                        >
-                            {ctaLabel}
-                        </button>
-                    </div>
-                )}
-
-                {/* Секции и уроки */}
-                {total === 0 && (
-                    <div
-                        style={{
-                            marginTop: '28px',
-                            padding: '28px 22px',
-                            borderRadius: '22px',
-                            background: 'var(--card-bg)',
-                            border: '1px solid var(--border)',
-                        }}
-                    >
-                        <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
-                            Уроки ещё не добавлены, материалы готовятся.
-                        </p>
-                    </div>
-                )}
-
-                {groups
-                    .filter((g) => g.lessons.length > 0)
-                    .map((g) => (
-                        <section key={g.id} style={{ marginTop: '36px' }}>
-                            <p
-                                style={{
-                                    color: 'var(--accent-soft)',
-                                    fontSize: '12px',
-                                    fontWeight: '700',
-                                    letterSpacing: '1.5px',
-                                    textTransform: 'uppercase',
-                                    marginBottom: '6px',
+                                    padding: '28px 22px',
+                                    borderRadius: '22px',
+                                    background: 'var(--card-bg)',
+                                    border: '1px solid var(--border)',
                                 }}
                             >
-                                {g.title}
-                            </p>
-                            <div style={{ borderTop: '1px solid var(--border-soft)' }}>
-                                {g.lessons.map((l) => {
-                                    const done = completedIds.has(l.id);
-                                    return (
-                                        <button
-                                            key={l.id}
-                                            onClick={() => router.push(`/learn/${courseId}/${l.id}`)}
-                                            style={{
-                                                width: '100%',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '14px',
-                                                padding: '18px 0',
-                                                background: 'transparent',
-                                                border: 'none',
-                                                borderBottom: '1px solid var(--border-soft)',
-                                                cursor: 'pointer',
-                                                textAlign: 'left',
-                                                fontFamily: 'var(--sans)',
-                                            }}
-                                        >
-                                            <span
-                                                style={{
-                                                    flex: 'none',
-                                                    width: '34px',
-                                                    fontFamily: 'var(--serif)',
-                                                    fontWeight: '700',
-                                                    fontSize: '18px',
-                                                    color: 'var(--accent-soft)',
-                                                }}
-                                            >
-                                                {l.number}
-                                            </span>
-                                            <span
-                                                style={{
-                                                    flex: 1,
-                                                    fontSize: '16px',
-                                                    color: done ? 'var(--text-muted)' : 'var(--text)',
-                                                }}
-                                            >
-                                                {l.title}
-                                            </span>
-                                            {done ? (
-                                                <span
+                                <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
+                                    Уроки ещё не добавлены, материалы готовятся.
+                                </p>
+                            </div>
+                        )}
+
+                        {groups
+                            .filter((g) => g.lessons.length > 0)
+                            .map((g, gi) => (
+                                <section key={g.id} style={{ marginTop: gi === 0 ? 0 : '36px' }}>
+                                    <p
+                                        style={{
+                                            color: 'var(--accent-soft)',
+                                            fontSize: '12px',
+                                            fontWeight: '700',
+                                            letterSpacing: '1.5px',
+                                            textTransform: 'uppercase',
+                                            marginBottom: '6px',
+                                        }}
+                                    >
+                                        {g.title}
+                                    </p>
+                                    <div style={{ borderTop: '1px solid var(--border-soft)' }}>
+                                        {g.lessons.map((l) => {
+                                            const done = completedIds.has(l.id);
+                                            return (
+                                                <button
+                                                    key={l.id}
+                                                    onClick={() => router.push(`/learn/${courseId}/${l.id}`)}
                                                     style={{
-                                                        flex: 'none',
-                                                        width: '24px',
-                                                        height: '24px',
-                                                        borderRadius: '50%',
-                                                        background: 'var(--accent-soft)',
-                                                        color: 'var(--bg)',
+                                                        width: '100%',
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        fontSize: '13px',
-                                                        fontWeight: '800',
+                                                        gap: '14px',
+                                                        padding: '18px 0',
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        borderBottom: '1px solid var(--border-soft)',
+                                                        cursor: 'pointer',
+                                                        textAlign: 'left',
+                                                        fontFamily: 'var(--sans)',
                                                     }}
                                                 >
-                                                    ✓
-                                                </span>
-                                            ) : (
-                                                <span style={{ flex: 'none', color: 'var(--text-faint)', fontSize: '20px' }}>
-                                                    ›
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
+                                                    <span
+                                                        style={{
+                                                            flex: 'none',
+                                                            width: '34px',
+                                                            fontFamily: 'var(--serif)',
+                                                            fontWeight: '700',
+                                                            fontSize: '18px',
+                                                            color: 'var(--accent-soft)',
+                                                        }}
+                                                    >
+                                                        {l.number}
+                                                    </span>
+                                                    <span
+                                                        style={{
+                                                            flex: 1,
+                                                            fontSize: '16px',
+                                                            color: done ? 'var(--text-muted)' : 'var(--text)',
+                                                        }}
+                                                    >
+                                                        {l.title}
+                                                    </span>
+                                                    {done ? (
+                                                        <span
+                                                            style={{
+                                                                flex: 'none',
+                                                                width: '24px',
+                                                                height: '24px',
+                                                                borderRadius: '50%',
+                                                                background: 'var(--accent-soft)',
+                                                                color: 'var(--bg)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                fontSize: '13px',
+                                                                fontWeight: '800',
+                                                            }}
+                                                        >
+                                                            ✓
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ flex: 'none', color: 'var(--text-faint)', fontSize: '20px' }}>
+                                                            ›
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            ))}
+                    </div>
+
+                    {/* Прогресс (справа на широких экранах, сверху на телефоне) */}
+                    {total > 0 && (
+                        <aside className="course-aside">
+                            <div
+                                style={{
+                                    padding: '22px',
+                                    borderRadius: '22px',
+                                    background: 'var(--card-bg)',
+                                    border: '1px solid var(--border)',
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '10px' }}>
+                                    <span style={{ color: 'var(--text-muted)' }}>
+                                        {completedCount} из {total} уроков
+                                    </span>
+                                    <span style={{ color: 'var(--text)', fontWeight: '700' }}>{percent}%</span>
+                                </div>
+                                <div
+                                    style={{
+                                        height: '6px',
+                                        borderRadius: '999px',
+                                        background: 'rgba(111,163,224,0.18)',
+                                        overflow: 'hidden',
+                                        marginBottom: '18px',
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            width: `${percent}%`,
+                                            height: '100%',
+                                            background: 'var(--accent-soft)',
+                                            borderRadius: '999px',
+                                            transition: 'width 0.4s ease',
+                                        }}
+                                    />
+                                </div>
+                                <button
+                                    onClick={() => ctaTarget && router.push(`/learn/${courseId}/${ctaTarget}`)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '15px',
+                                        borderRadius: '999px',
+                                        border: 'none',
+                                        background: 'var(--accent)',
+                                        color: 'var(--bg)',
+                                        fontSize: '15px',
+                                        fontWeight: '700',
+                                        fontFamily: 'var(--sans)',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    {ctaLabel}
+                                </button>
                             </div>
-                        </section>
-                    ))}
+                        </aside>
+                    )}
+                </div>
             </main>
 
             <BottomNav />
