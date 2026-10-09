@@ -10,6 +10,9 @@ export default function CreateUserPage() {
     const [copied, setCopied] = useState(false);
     const router = useRouter();
 
+    const login = result?.login ?? '';
+    const password = result?.password ?? '';
+
     const handleCreate = async () => {
         setError('');
         setResult(null);
@@ -26,22 +29,19 @@ export default function CreateUserPage() {
         setLoading(false);
     };
 
-    const login = result?.login ?? '';
-const password = result?.password ?? '';
+    const copyCreds = async () => {
+        if (!login || !password) return;
 
-const copyCreds = async () => {
-    if (!login || !password) return;
+        try {
+            const text = `Логин: ${login}\nПароль: ${password}`;
+            await navigator.clipboard.writeText(text);
 
-    try {
-        const text = `Логин: ${login}\nПароль: ${password}`;
-        await navigator.clipboard.writeText(text);
-
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    } catch {
-        setError('Не удалось скопировать. Скопируйте данные вручную.');
-    }
-};
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            setError('Не удалось скопировать. Скопируйте данные вручную.');
+        }
+    };
 
     return (
         <div style={{ minHeight: '100vh', background: '#0a0e1a', fontFamily: 'monospace', padding: '20px' }}>
@@ -55,7 +55,7 @@ const copyCreds = async () => {
 
                 <div style={{ background: '#111827', border: '1px solid #1e2433', borderRadius: '12px', padding: '20px' }}>
                     <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>
-                        Логин и пароль сгенерируются автоматически.
+                        Логин и пароль сгенерируются автоматически. Студенту сразу откроются все опубликованные курсы.
                     </p>
                     <button
                         onClick={handleCreate}
@@ -75,11 +75,23 @@ const copyCreds = async () => {
                                 ✅ Аккаунт создан
                             </p>
                             <p style={{ color: '#fff', fontSize: '13px', marginBottom: '4px' }}>
-                                Логин: <span style={{ color: '#00e5ff' }}>{result.login}</span>
+                                Логин: <span style={{ color: '#00e5ff' }}>{login}</span>
                             </p>
-                            <p style={{ color: '#fff', fontSize: '13px', marginBottom: '14px' }}>
-                                Пароль: <span style={{ color: '#00e5ff' }}>{result.password}</span>
+                            <p style={{ color: '#fff', fontSize: '13px', marginBottom: '10px' }}>
+                                Пароль: <span style={{ color: '#00e5ff' }}>{password}</span>
                             </p>
+
+                            {result.enrolled > 0 && (
+                                <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '10px' }}>
+                                    📚 Открыт доступ к курсам: {result.enrolled}
+                                </p>
+                            )}
+                            {result.enrollWarning && (
+                                <p style={{ color: '#f59e0b', fontSize: '12px', marginBottom: '10px' }}>
+                                    ⚠️ {result.enrollWarning}
+                                </p>
+                            )}
+
                             <p style={{ color: '#f59e0b', fontSize: '12px', marginBottom: '14px' }}>
                                 ⚠️ Пароль показывается только один раз — скопируйте и отправьте студенту сейчас.
                             </p>
