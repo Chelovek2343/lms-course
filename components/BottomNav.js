@@ -32,6 +32,18 @@ const ICONS = {
             <rect x="14" y="14" width="7" height="7" rx="1.5" />
         </svg>
     ),
+    docs: (
+        <svg {...svgProps}>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+            <path d="M8 13h8M8 17h6" />
+        </svg>
+    ),
+    chat: (
+        <svg {...svgProps}>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+    ),
     panel: (
         <svg {...svgProps}>
             <rect x="3" y="3" width="18" height="18" rx="3" />
@@ -49,6 +61,8 @@ const ICONS = {
 
 const STUDENT_ITEMS = [
     { href: '/courses', label: 'Мои курсы', icon: 'courses', match: ['/courses', '/learn'] },
+    { href: '/documents', label: 'Документы', icon: 'docs', match: ['/documents'] },
+    { href: '/community', label: 'Сообщество', icon: 'chat', match: ['/community'] },
     { href: '/profile', label: 'Профиль', icon: 'profile', match: ['/profile'] },
 ];
 
