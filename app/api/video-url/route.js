@@ -1,21 +1,8 @@
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { createClient } from '@supabase/supabase-js'
 import { createRouteClient } from '../../../lib/supabase-server'
-
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-  },
-})
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-)
+import { supabaseAdmin, STAFF_ROLES } from '../../../lib/server-auth'
+import { s3, BUCKET } from '../../../lib/r2'
 
 export async function POST(request) {
   try {
@@ -34,21 +21,21 @@ export async function POST(request) {
     }
     const lessonId = match[1]
 
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    const isStaff = ['admin', 'superuser', 'owner'].includes(profile?.role)
-
-    if (!isStaff) {
-      const { data: lesson } = await supabaseAdmin
+    // три запроса одновременно, а не по очереди
+    const [profileRes, lessonRes, enrollRes] = await Promise.all([
+      supabaseAdmin.from('profiles').select('role').eq('id', user.id).single(),
+      supabaseAdmin
         .from('lessons')
         .select('id, sections!inner(course_id)')
         .eq('id', lessonId)
-        .maybeSingle()
+        .maybeSingle(),
+      supabaseAdmin.from('enrollments').select('course_id').eq('user_id', user.id),
+    ])
 
+    const isStaff = STAFF_ROLES.includes(profileRes.data?.role)
+
+    if (!isStaff) {
+      const lesson = lessonRes.data
       if (!lesson) {
         return Response.json({ error: 'Урок не найден' }, { status: 404 })
       }
@@ -57,23 +44,13 @@ export async function POST(request) {
         ? lesson.sections[0]?.course_id
         : lesson.sections?.course_id
 
-      const { data: enrollment } = await supabaseAdmin
-        .from('enrollments')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('course_id', courseId)
-        .maybeSingle()
-
-      if (!enrollment) {
+      const enrolled = (enrollRes.data || []).some((e) => e.course_id === courseId)
+      if (!enrolled) {
         return Response.json({ error: 'Нет доступа к этому курсу' }, { status: 403 })
       }
     }
 
-    const command = new GetObjectCommand({
-      Bucket: process.env.CLOUDFLARE_R2_BUCKET,
-      Key: key,
-    })
-
+    const command = new GetObjectCommand({ Bucket: BUCKET, Key: key })
     const url = await getSignedUrl(s3, command, { expiresIn: 900 })
     return Response.json({ url })
   } catch (error) {
