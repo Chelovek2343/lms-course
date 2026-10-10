@@ -26,17 +26,28 @@ export default function PdfViewer({ url }) {
                 document.head.appendChild(s);
             });
 
+        // быстрый режим: файл грузится кусками по 1 МБ, первые страницы видны сразу
+        // безопасный режим: файл целиком (на случай, если хранилище не отдаёт куски)
+        const openPdf = (pdfjsLib, fast) =>
+            pdfjsLib.getDocument(
+                fast
+                    ? { url, rangeChunkSize: 1024 * 1024 }
+                    : { url, disableRange: true, disableStream: true },
+            ).promise;
+
         const run = async () => {
             try {
                 setStatus('loading');
                 const pdfjsLib = await loadPdfJs();
                 pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
 
-                pdfDoc = await pdfjsLib.getDocument({
-                    url,
-                    disableRange: true,
-                    disableStream: true,
-                }).promise;
+                try {
+                    pdfDoc = await openPdf(pdfjsLib, true);
+                } catch (e) {
+                    if (cancelled) return;
+                    console.warn('PDF: быстрый режим не сработал, грузим целиком', e);
+                    pdfDoc = await openPdf(pdfjsLib, false);
+                }
                 if (cancelled) return;
 
                 const container = containerRef.current;
