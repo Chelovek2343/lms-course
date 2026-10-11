@@ -9,18 +9,19 @@ import BottomNav from '../../../components/BottomNav';
 const MAX_WIDTH = 1180;
 const STAFF = ['admin', 'superuser', 'owner'];
 const INTERNAL_DOMAIN = '@lms.internal';
+const ROLE_ORDER = { owner: 0, superuser: 1, admin: 2, student: 3 };
 
 const ROLE_META = {
     owner: { label: '🔱 Owner', color: '#c084fc', border: 'rgba(192,132,252,0.4)', bg: 'rgba(168,85,247,0.1)' },
     superuser: { label: '👑 Superuser', color: '#f87171', border: 'rgba(248,113,113,0.4)', bg: 'rgba(239,68,68,0.1)' },
     admin: { label: '⚙️ Admin', color: '#f5b84a', border: 'rgba(245,158,11,0.4)', bg: 'rgba(245,158,11,0.1)' },
-    student: { label: '🎓 Студент', color: 'var(--accent-soft)', border: 'rgba(111,163,224,0.4)', bg: 'rgba(111,163,224,0.12)' },
+    student: { label: '🎓 Студент', color: '#9cc0f0', border: 'rgba(111,163,224,0.4)', bg: 'rgba(111,163,224,0.12)' },
 };
 
 const pillBase = {
-    padding: '10px 18px',
+    padding: '8px 14px',
     borderRadius: '999px',
-    fontSize: '13px',
+    fontSize: '12.5px',
     fontWeight: '700',
     fontFamily: 'var(--sans)',
     cursor: 'pointer',
@@ -50,6 +51,8 @@ export default function AdminUsersPage() {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actingOn, setActingOn] = useState(null);
+    const [query, setQuery] = useState('');
+    const [filter, setFilter] = useState('all');
     const router = useRouter();
     const supabase = createClient();
 
@@ -81,16 +84,16 @@ export default function AdminUsersPage() {
     }, []);
 
     const loadUsers = async (viewerRole) => {
-        let query = supabase
+        let q = supabase
             .from('profiles')
             .select('*')
             .order('created_at', { ascending: false });
 
         if (viewerRole !== 'owner') {
-            query = query.not('role', 'in', '(superuser,owner)');
+            q = q.not('role', 'in', '(superuser,owner)');
         }
 
-        const { data } = await query;
+        const { data } = await q;
         setUsers(data || []);
         setLoading(false);
     };
@@ -150,8 +153,72 @@ export default function AdminUsersPage() {
 
     const myInitial = displayName(me).trim().charAt(0).toUpperCase();
 
+    // сотрудники сверху, внутри группы новые выше
+    const sorted = [...users].sort((a, b) => {
+        const ra = ROLE_ORDER[a.role] ?? 3;
+        const rb = ROLE_ORDER[b.role] ?? 3;
+        if (ra !== rb) return ra - rb;
+        return new Date(b.created_at) - new Date(a.created_at);
+    });
+
+    const counts = {
+        all: users.length,
+        students: users.filter((u) => u.role === 'student').length,
+        staff: users.filter((u) => u.role !== 'student').length,
+    };
+
+    const q = query.trim().toLowerCase();
+    const visible = sorted.filter((u) => {
+        if (filter === 'students' && u.role !== 'student') return false;
+        if (filter === 'staff' && u.role === 'student') return false;
+        if (!q) return true;
+        return (
+            (u.login || '').toLowerCase().includes(q) ||
+            (u.email || '').toLowerCase().includes(q)
+        );
+    });
+
+    const FILTERS = [
+        { id: 'all', label: 'Все' },
+        { id: 'students', label: 'Студенты' },
+        { id: 'staff', label: 'Администрация' },
+    ];
+
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)', paddingBottom: '100px' }}>
+            <style>{`
+                .ul-head, .ul-row {
+                    display: grid;
+                    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.8fr) 150px 100px 260px;
+                    gap: 16px;
+                    align-items: center;
+                }
+                .ul-head {
+                    padding: 0 20px 12px;
+                    color: var(--text-faint);
+                    font-size: 12px;
+                    font-weight: 700;
+                    letter-spacing: 1px;
+                    text-transform: uppercase;
+                }
+                .ul-row { padding: 14px 20px; border-top: 1px solid var(--border-soft); }
+                .ul-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+                .ul-date-inline { display: none; }
+                @media (max-width: 900px) {
+                    .ul-head { display: none; }
+                    .ul-row {
+                        grid-template-columns: minmax(0, 1fr) auto;
+                        row-gap: 10px;
+                        column-gap: 12px;
+                        padding: 16px;
+                    }
+                    .ul-contact { grid-column: 1 / -1; grid-row: 2; }
+                    .ul-date { display: none; }
+                    .ul-date-inline { display: inline; }
+                    .ul-actions { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start; }
+                }
+            `}</style>
+
             <AppHeader initial={myInitial} maxWidth={MAX_WIDTH} />
 
             <main style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '26px 20px 0' }}>
@@ -179,7 +246,7 @@ export default function AdminUsersPage() {
                         alignItems: 'flex-end',
                         gap: '16px',
                         flexWrap: 'wrap',
-                        marginBottom: '28px',
+                        marginBottom: '24px',
                     }}
                 >
                     <div>
@@ -190,7 +257,6 @@ export default function AdminUsersPage() {
                                 fontSize: 'clamp(32px, 7vw, 46px)',
                                 lineHeight: '1.08',
                                 letterSpacing: '-1px',
-                                color: 'var(--text)',
                                 marginBottom: '8px',
                             }}
                         >
@@ -199,47 +265,105 @@ export default function AdminUsersPage() {
                             </em>
                         </h1>
                         <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
-                            Всего: {users.length}. Роли и доступ.
+                            Роли и доступ. Всего: {users.length}
                         </p>
                     </div>
-                    <button onClick={() => router.push('/admin/users/create')} style={{ ...pillSolid, padding: '13px 24px', fontSize: '14px' }}>
+                    <button
+                        onClick={() => router.push('/admin/users/create')}
+                        style={{ ...pillSolid, padding: '13px 24px', fontSize: '14px' }}
+                    >
                         + Создать аккаунт
                     </button>
                 </div>
 
+                {/* Поиск и фильтры */}
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '18px' }}>
+                    <input
+                        type="text"
+                        placeholder="Поиск по логину или email"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        style={{
+                            flex: '1 1 260px',
+                            maxWidth: '420px',
+                            padding: '12px 16px',
+                            background: 'var(--input-bg)',
+                            border: '1.5px solid rgba(111,163,224,0.25)',
+                            borderRadius: '999px',
+                            color: 'var(--text)',
+                            fontSize: '14px',
+                            fontFamily: 'var(--sans)',
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                        }}
+                    />
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {FILTERS.map((f) => {
+                            const active = filter === f.id;
+                            return (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setFilter(f.id)}
+                                    style={{
+                                        ...pillBase,
+                                        padding: '10px 16px',
+                                        background: active ? 'var(--accent)' : 'transparent',
+                                        color: active ? 'var(--bg)' : 'var(--text)',
+                                        border: active
+                                            ? '1.5px solid var(--accent)'
+                                            : '1.5px solid rgba(111,163,224,0.4)',
+                                    }}
+                                >
+                                    {f.label} ({counts[f.id]})
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Список */}
+                <div className="ul-head">
+                    <span>Пользователь</span>
+                    <span>Контакт</span>
+                    <span>Роль</span>
+                    <span>Создан</span>
+                    <span />
+                </div>
+
                 <div
                     style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-                        gap: '14px',
+                        background: 'var(--card-bg)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '22px',
+                        overflow: 'hidden',
                     }}
                 >
-                    {users.map((u) => {
+                    {visible.length === 0 && (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '15px', padding: '24px 20px' }}>
+                            Никого не найдено.
+                        </p>
+                    )}
+
+                    {visible.map((u, i) => {
                         const meta = ROLE_META[u.role] || ROLE_META.student;
                         const realEmail = u.email && !u.email.endsWith(INTERNAL_DOMAIN) ? u.email : null;
                         const isMe = u.id === me.id;
                         const manageable = canManage(u);
                         const busy = actingOn === u.id;
+                        const date = new Date(u.created_at).toLocaleDateString('ru-RU');
 
                         return (
-                            <article
+                            <div
                                 key={u.id}
-                                style={{
-                                    background: 'var(--card-bg)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: '20px',
-                                    padding: '18px 20px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '14px',
-                                }}
+                                className="ul-row"
+                                style={i === 0 ? { borderTop: 'none' } : undefined}
                             >
-                                <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                                     <span
                                         style={{
                                             flex: 'none',
-                                            width: '44px',
-                                            height: '44px',
+                                            width: '38px',
+                                            height: '38px',
                                             borderRadius: '50%',
                                             background: '#1b3d6e',
                                             display: 'flex',
@@ -247,15 +371,16 @@ export default function AdminUsersPage() {
                                             justifyContent: 'center',
                                             fontFamily: 'var(--serif)',
                                             fontWeight: '700',
-                                            fontSize: '18px',
+                                            fontSize: '16px',
                                             color: 'var(--text)',
                                         }}
                                     >
                                         {displayName(u).trim().charAt(0).toUpperCase()}
                                     </span>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <p
+                                    <span style={{ minWidth: 0 }}>
+                                        <span
                                             style={{
+                                                display: 'block',
                                                 color: 'var(--text)',
                                                 fontWeight: '700',
                                                 fontSize: '15px',
@@ -263,15 +388,37 @@ export default function AdminUsersPage() {
                                             }}
                                         >
                                             {displayName(u)}
-                                        </p>
-                                        <p style={{ color: 'var(--text-muted)', fontSize: '12.5px', wordBreak: 'break-word' }}>
-                                            {realEmail || 'Вход по логину'} ·{' '}
-                                            {new Date(u.created_at).toLocaleDateString('ru-RU')}
-                                        </p>
-                                    </div>
+                                            {isMe && (
+                                                <span
+                                                    style={{
+                                                        marginLeft: '8px',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '999px',
+                                                        background: 'rgba(255,255,255,0.08)',
+                                                        color: 'var(--text-muted)',
+                                                        fontSize: '11px',
+                                                        fontWeight: '700',
+                                                    }}
+                                                >
+                                                    это вы
+                                                </span>
+                                            )}
+                                        </span>
+                                    </span>
+                                </div>
+
+                                <div
+                                    className="ul-contact"
+                                    style={{ color: 'var(--text-muted)', fontSize: '13.5px', wordBreak: 'break-word', minWidth: 0 }}
+                                >
+                                    {realEmail || 'Вход по логину'}
+                                    <span className="ul-date-inline"> · {date}</span>
+                                </div>
+
+                                <div>
                                     <span
                                         style={{
-                                            flex: 'none',
+                                            display: 'inline-block',
                                             padding: '4px 11px',
                                             borderRadius: '999px',
                                             background: meta.bg,
@@ -279,46 +426,37 @@ export default function AdminUsersPage() {
                                             color: meta.color,
                                             fontSize: '11.5px',
                                             fontWeight: '700',
+                                            whiteSpace: 'nowrap',
                                         }}
                                     >
                                         {meta.label}
                                     </span>
                                 </div>
 
-                                {manageable && (
-                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                        <button
-                                            onClick={() => toggleAdmin(u)}
-                                            disabled={busy}
-                                            style={{
-                                                ...(u.role === 'admin' ? pillMuted : pillAmber),
-                                                opacity: busy ? 0.6 : 1,
-                                            }}
-                                        >
-                                            {u.role === 'admin' ? 'Снять админку' : 'Сделать админом'}
-                                        </button>
-                                        <button
-                                            onClick={() => deleteUser(u)}
-                                            disabled={busy}
-                                            style={{ ...pillDanger, opacity: busy ? 0.6 : 1 }}
-                                        >
-                                            Удалить
-                                        </button>
-                                    </div>
-                                )}
+                                <div className="ul-date" style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                                    {date}
+                                </div>
 
-                                {!manageable && (
-                                    <p style={{ color: 'var(--text-faint)', fontSize: '12.5px' }}>
-                                        {isMe ? 'Это вы' : 'Защищённый аккаунт'}
-                                    </p>
-                                )}
-                            </article>
-                        );
-                    })}
-                </div>
-            </main>
-
-            <BottomNav />
-        </div>
-    );
-}
+                                <div className="ul-actions">
+                                    {manageable ? (
+                                        <>
+                                            <button
+                                                onClick={() => toggleAdmin(u)}
+                                                disabled={busy}
+                                                style={{
+                                                    ...(u.role === 'admin' ? pillMuted : pillAmber),
+                                                    opacity: busy ? 0.6 : 1,
+                                                }}
+                                            >
+                                                {u.role === 'admin' ? 'Снять админку' : 'Сделать админом'}
+                                            </button>
+                                            <button
+                                                onClick={() => deleteUser(u)}
+                                                disabled={busy}
+                                                style={{ ...pillDanger, opacity: busy ? 0.6 : 1 }}
+                                            >
+                                                Удалить
+                                            </button>
+                                        </>
+                                    ) : (
+                                        !isMe 
