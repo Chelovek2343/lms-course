@@ -1,14 +1,60 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '../../../../lib/supabase';
+import AppHeader from '../../../../components/AppHeader';
+import BottomNav from '../../../../components/BottomNav';
+
+const MAX_WIDTH = 1180;
+const STAFF = ['admin', 'superuser', 'owner'];
+
+const pillSolid = {
+    width: '100%',
+    padding: '16px',
+    borderRadius: '999px',
+    border: 'none',
+    background: 'var(--accent)',
+    color: 'var(--bg)',
+    fontSize: '15px',
+    fontWeight: '700',
+    fontFamily: 'var(--sans)',
+    cursor: 'pointer',
+};
 
 export default function CreateUserPage() {
+    const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
     const router = useRouter();
+    const supabase = createClient();
+
+    useEffect(() => {
+        const init = async () => {
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+            if (!user) {
+                router.replace('/login');
+                return;
+            }
+
+            const { data: prof } = await supabase
+                .from('profiles')
+                .select('login, email, role')
+                .eq('id', user.id)
+                .single();
+
+            if (!STAFF.includes(prof?.role)) {
+                router.replace('/dashboard');
+                return;
+            }
+            setProfile(prof);
+        };
+        init();
+    }, []);
 
     const login = result?.login ?? '';
     const password = result?.password ?? '';
@@ -16,15 +62,20 @@ export default function CreateUserPage() {
     const handleCreate = async () => {
         setError('');
         setResult(null);
+        setCopied(false);
         setLoading(true);
 
-        const res = await fetch('/api/admin/create-user', { method: 'POST' });
-        const data = await res.json();
+        try {
+            const res = await fetch('/api/admin/create-user', { method: 'POST' });
+            const data = await res.json();
 
-        if (!res.ok) {
-            setError(data.error || 'Не удалось создать аккаунт');
-        } else {
-            setResult(data);
+            if (!res.ok) {
+                setError(data.error || 'Не удалось создать аккаунт');
+            } else {
+                setResult(data);
+            }
+        } catch {
+            setError('Не удалось связаться с сервером');
         }
         setLoading(false);
     };
@@ -33,9 +84,7 @@ export default function CreateUserPage() {
         if (!login || !password) return;
 
         try {
-            const text = `Логин: ${login}\nПароль: ${password}`;
-            await navigator.clipboard.writeText(text);
-
+            await navigator.clipboard.writeText(`Логин: ${login}\nПароль: ${password}`);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch {
@@ -43,68 +92,154 @@ export default function CreateUserPage() {
         }
     };
 
-    return (
-        <div style={{ minHeight: '100vh', background: '#0a0e1a', fontFamily: 'monospace', padding: '20px' }}>
-            <div style={{ maxWidth: '520px', margin: '0 auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '16px' }}>
-                    <h1 style={{ color: '#fff', fontSize: 'clamp(18px,4vw,22px)' }}>➕ Создать студента</h1>
-                    <button onClick={() => router.push('/admin/users')} style={{ padding: '8px 14px', background: 'transparent', border: '1px solid #1e2433', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '13px' }}>
-                        ← Пользователи
-                    </button>
-                </div>
-
-                <div style={{ background: '#111827', border: '1px solid #1e2433', borderRadius: '12px', padding: '20px' }}>
-                    <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>
-                        Логин и пароль сгенерируются автоматически. Студенту сразу откроются все опубликованные курсы.
-                    </p>
-                    <button
-                        onClick={handleCreate}
-                        disabled={loading}
-                        style={{ width: '100%', padding: '12px', background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.3)', borderRadius: '8px', color: '#00e5ff', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}
-                    >
-                        {loading ? 'Создаю...' : 'Создать аккаунт'}
-                    </button>
-
-                    {error && (
-                        <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '14px' }}>{error}</p>
-                    )}
-
-                    {result && (
-                        <div style={{ marginTop: '20px', padding: '16px', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '10px' }}>
-                            <p style={{ color: '#10b981', fontSize: '13px', marginBottom: '10px', fontWeight: '600' }}>
-                                ✅ Аккаунт создан
-                            </p>
-                            <p style={{ color: '#fff', fontSize: '13px', marginBottom: '4px' }}>
-                                Логин: <span style={{ color: '#00e5ff' }}>{login}</span>
-                            </p>
-                            <p style={{ color: '#fff', fontSize: '13px', marginBottom: '10px' }}>
-                                Пароль: <span style={{ color: '#00e5ff' }}>{password}</span>
-                            </p>
-
-                            {result.enrolled > 0 && (
-                                <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '10px' }}>
-                                    📚 Открыт доступ к курсам: {result.enrolled}
-                                </p>
-                            )}
-                            {result.enrollWarning && (
-                                <p style={{ color: '#f59e0b', fontSize: '12px', marginBottom: '10px' }}>
-                                    ⚠️ {result.enrollWarning}
-                                </p>
-                            )}
-
-                            <p style={{ color: '#f59e0b', fontSize: '12px', marginBottom: '14px' }}>
-                                ⚠️ Пароль показывается только один раз — скопируйте и отправьте студенту сейчас.
-                            </p>
-                            <button
-                                onClick={copyCreds}
-                                style={{ width: '100%', padding: '10px', background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.3)', borderRadius: '8px', color: '#00e5ff', cursor: 'pointer', fontSize: '13px' }}
-                            >
-                                {copied ? 'Скопировано ✓' : 'Скопировать логин + пароль'}
-                            </button>
-                        </div>
-                    )}
-                </div>
+    if (!profile)
+        return (
+            <div
+                style={{
+                    minHeight: '100vh',
+                    background: 'var(--bg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--sans)' }}>Загрузка...</p>
             </div>
+        );
+
+    const initial = (profile.login || profile.email || '?').trim().charAt(0).toUpperCase();
+
+    return (
+        <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)', paddingBottom: '100px' }}>
+            <AppHeader initial={initial} maxWidth={MAX_WIDTH} />
+
+            <main style={{ maxWidth: '640px', margin: '0 auto', padding: '26px 20px 0' }}>
+                <button
+                    onClick={() => router.push('/admin/users')}
+                    style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: 'var(--accent-soft)',
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        fontFamily: 'var(--sans)',
+                        cursor: 'pointer',
+                        marginBottom: '26px',
+                    }}
+                >
+                    ← Пользователи
+                </button>
+
+                <h1
+                    style={{
+                        fontFamily: 'var(--serif)',
+                        fontWeight: '800',
+                        fontSize: 'clamp(32px, 8vw, 44px)',
+                        lineHeight: '1.08',
+                        letterSpacing: '-1px',
+                        color: 'var(--text)',
+                        marginBottom: '14px',
+                    }}
+                >
+                    Новый{' '}
+                    <em style={{ fontStyle: 'italic', color: 'var(--accent-soft)', fontWeight: '500' }}>
+                        студент
+                    </em>
+                </h1>
+                <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.6', marginBottom: '28px' }}>
+                    Логин и пароль сгенерируются автоматически. Студенту сразу откроются все опубликованные курсы.
+                </p>
+
+                <button
+                    onClick={handleCreate}
+                    disabled={loading}
+                    style={{ ...pillSolid, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+                >
+                    {loading ? 'Создаю...' : result ? 'Создать ещё одного' : 'Создать аккаунт'}
+                </button>
+
+                {error && (
+                    <p style={{ color: '#ff9b9b', fontSize: '14px', marginTop: '16px' }}>{error}</p>
+                )}
+
+                {result && (
+                    <div
+                        style={{
+                            marginTop: '24px',
+                            padding: '24px',
+                            borderRadius: '22px',
+                            background: 'var(--card-bg)',
+                            border: '1px solid rgba(52,211,153,0.4)',
+                        }}
+                    >
+                        <p style={{ color: '#6ee7b7', fontWeight: '700', fontSize: '15px', marginBottom: '16px' }}>
+                            ✅ Аккаунт создан
+                        </p>
+
+                        <p style={{ color: 'var(--text-muted)', fontSize: '12.5px', marginBottom: '4px' }}>Логин</p>
+                        <p
+                            style={{
+                                fontFamily: 'monospace',
+                                fontSize: '20px',
+                                color: 'var(--text)',
+                                marginBottom: '16px',
+                                wordBreak: 'break-all',
+                            }}
+                        >
+                            {login}
+                        </p>
+
+                        <p style={{ color: 'var(--text-muted)', fontSize: '12.5px', marginBottom: '4px' }}>Пароль</p>
+                        <p
+                            style={{
+                                fontFamily: 'monospace',
+                                fontSize: '20px',
+                                color: 'var(--accent-soft)',
+                                marginBottom: '18px',
+                                wordBreak: 'break-all',
+                            }}
+                        >
+                            {password}
+                        </p>
+
+                        {result.enrolled > 0 && (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '13.5px', marginBottom: '10px' }}>
+                                📚 Открыт доступ к курсам: {result.enrolled}
+                            </p>
+                        )}
+                        {result.enrollWarning && (
+                            <p style={{ color: '#f5b84a', fontSize: '13.5px', marginBottom: '10px' }}>
+                                ⚠️ {result.enrollWarning}
+                            </p>
+                        )}
+
+                        <p style={{ color: '#f5b84a', fontSize: '13.5px', lineHeight: '1.5', marginBottom: '18px' }}>
+                            ⚠️ Пароль показывается только один раз. Скопируйте его и отправьте студенту сейчас.
+                        </p>
+
+                        <button
+                            onClick={copyCreds}
+                            style={{
+                                width: '100%',
+                                padding: '14px',
+                                borderRadius: '999px',
+                                background: 'transparent',
+                                border: '1.5px solid rgba(111,163,224,0.5)',
+                                color: 'var(--accent-soft)',
+                                fontSize: '14.5px',
+                                fontWeight: '700',
+                                fontFamily: 'var(--sans)',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {copied ? 'Скопировано ✓' : 'Скопировать логин и пароль'}
+                        </button>
+                    </div>
+                )}
+            </main>
+
+            <BottomNav />
         </div>
     );
 }
