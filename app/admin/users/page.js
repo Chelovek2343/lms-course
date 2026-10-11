@@ -459,4 +459,20 @@ export default function AdminUsersPage() {
                                             </button>
                                         </>
                                     ) : (
-                                        !isMe 
+                                        !isMe && (
+                                            <span style={{ color: 'var(--text-faint)', fontSize: '12.5px' }}>
+                                                Защищённый аккаунт
+                                            </span>
+                                        )
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </main>
+
+            <BottomNav />
+        </div>
+    );
+}
