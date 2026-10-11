@@ -3,52 +3,128 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
+import AppHeader from '../../components/AppHeader';
+import BottomNav from '../../components/BottomNav';
 
+const MAX_WIDTH = 1180;
 const INTERNAL_DOMAIN = '@lms.internal';
 
-const card = {
-    background: '#111827',
-    border: '1px solid #1e2433',
-    borderRadius: '12px',
-    padding: '20px',
-    marginBottom: '16px',
+const ROLE_LABEL = {
+    student: 'Студент',
+    admin: 'Администратор',
+    superuser: 'Суперпользователь',
+    owner: 'Владелец',
 };
+
+const cardStyle = {
+    background: 'var(--card-bg)',
+    border: '1px solid var(--border)',
+    borderRadius: '24px',
+    overflow: 'hidden',
+};
+
+const labelStyle = {
+    display: 'block',
+    fontSize: '13px',
+    fontWeight: '700',
+    color: 'var(--text)',
+    marginBottom: '8px',
+};
+
 const inputStyle = {
     width: '100%',
-    padding: '12px',
-    background: '#0a0e1a',
-    border: '1px solid #1e2433',
-    borderRadius: '8px',
-    color: '#fff',
-    fontSize: '14px',
+    padding: '14px 16px',
+    background: 'var(--input-bg)',
+    border: '1.5px solid rgba(111,163,224,0.25)',
+    borderRadius: '14px',
+    color: 'var(--text)',
+    fontSize: '15px',
+    fontFamily: 'var(--sans)',
     boxSizing: 'border-box',
-    marginBottom: '10px',
+    outline: 'none',
 };
-const labelStyle = {
-    color: '#64748b',
-    fontSize: '12px',
-    display: 'block',
-    marginBottom: '6px',
-};
-const btnStyle = (busy) => ({
+
+const solidBtn = (disabled) => ({
     width: '100%',
-    padding: '12px',
-    background: 'rgba(0,229,255,0.1)',
-    border: '1px solid rgba(0,229,255,0.3)',
-    borderRadius: '8px',
-    color: '#00e5ff',
-    cursor: busy ? 'not-allowed' : 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    opacity: busy ? 0.6 : 1,
+    padding: '16px',
+    borderRadius: '999px',
+    border: 'none',
+    background: 'var(--accent)',
+    color: 'var(--bg)',
+    fontSize: '15px',
+    fontWeight: '700',
+    fontFamily: 'var(--sans)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.5 : 1,
 });
 
 function Msg({ m }) {
     if (!m) return null;
     return (
-        <p style={{ color: m.ok ? '#10b981' : '#ef4444', fontSize: '13px', marginTop: '10px' }}>
+        <p
+            style={{
+                color: m.ok ? '#6ee7b7' : '#ff9b9b',
+                fontSize: '13.5px',
+                lineHeight: '1.5',
+                marginTop: '12px',
+            }}
+        >
             {m.text}
         </p>
+    );
+}
+
+function Row({ title, hint, open, onToggle, first, children }) {
+    return (
+        <div style={{ borderTop: first ? 'none' : '1px solid var(--border-soft)' }}>
+            <button
+                onClick={onToggle}
+                style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '22px 24px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'var(--sans)',
+                }}
+            >
+                <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontWeight: '700', fontSize: '17px', color: 'var(--text)' }}>
+                        {title}
+                    </span>
+                    {hint && (
+                        <span
+                            style={{
+                                display: 'block',
+                                fontSize: '13px',
+                                marginTop: '3px',
+                                color: 'var(--text-muted)',
+                                wordBreak: 'break-word',
+                            }}
+                        >
+                            {hint}
+                        </span>
+                    )}
+                </span>
+                <span
+                    style={{
+                        flex: 'none',
+                        color: 'var(--accent-soft)',
+                        fontSize: '24px',
+                        transform: open ? 'rotate(90deg)' : 'none',
+                        transition: 'transform 0.2s',
+                    }}
+                >
+                    ›
+                </span>
+            </button>
+            {open && <div style={{ padding: '0 24px 24px' }}>{children}</div>}
+        </div>
     );
 }
 
@@ -56,6 +132,7 @@ export default function ProfilePage() {
     const [authUser, setAuthUser] = useState(null);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [open, setOpen] = useState(null);
 
     const [newLogin, setNewLogin] = useState('');
     const [loginMsg, setLoginMsg] = useState(null);
@@ -75,9 +152,11 @@ export default function ProfilePage() {
     const supabase = createClient();
 
     const loadData = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
         if (!user) {
-            router.push('/login');
+            router.replace('/login');
             return;
         }
         setAuthUser(user);
@@ -96,6 +175,8 @@ export default function ProfilePage() {
     useEffect(() => {
         loadData();
     }, []);
+
+    const toggle = (name) => setOpen((cur) => (cur === name ? null : name));
 
     const handleLoginChange = async () => {
         setLoginMsg(null);
@@ -145,7 +226,6 @@ export default function ProfilePage() {
 
         setPassBusy(true);
 
-        // проверяем текущий пароль
         const { error: verifyError } = await supabase.auth.signInWithPassword({
             email: authUser.email,
             password: currentPassword,
@@ -183,7 +263,7 @@ export default function ProfilePage() {
 
         const { error } = await supabase.auth.updateUser(
             { email: value },
-            { emailRedirectTo: `${window.location.origin}/profile` }
+            { emailRedirectTo: `${window.location.origin}/profile` },
         );
 
         if (error) {
@@ -194,120 +274,218 @@ export default function ProfilePage() {
                 text: `✅ Отправили письмо на ${value}. Перейдите по ссылке из письма, чтобы подтвердить адрес.`,
             });
             setNewEmail('');
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
             if (user) setAuthUser(user);
         }
         setEmailBusy(false);
     };
 
-    if (loading) {
+    if (loading)
         return (
-            <div style={{ minHeight: '100vh', background: '#0a0e1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <p style={{ color: '#64748b', fontFamily: 'monospace' }}>Загрузка...</p>
+            <div
+                style={{
+                    minHeight: '100vh',
+                    background: 'var(--bg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--sans)' }}>Загрузка...</p>
             </div>
         );
-    }
 
     const hasRealEmail = !!authUser?.email && !authUser.email.endsWith(INTERNAL_DOMAIN);
     const pendingEmail = authUser?.new_email;
+    const displayName = profile?.login || (profile?.email || '').split('@')[0] || 'Профиль';
+    const initial = displayName.trim().charAt(0).toUpperCase();
+    const unchanged = newLogin.trim().toLowerCase() === (profile?.login || '');
 
     return (
-        <div style={{ minHeight: '100vh', background: '#0a0e1a', fontFamily: 'monospace', padding: '20px' }}>
-            <div style={{ maxWidth: '520px', margin: '0 auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '16px' }}>
-                    <h1 style={{ color: '#fff', fontSize: 'clamp(18px,4vw,22px)' }}>👤 Профиль</h1>
-                    <button
-                        onClick={() => router.push('/dashboard')}
-                        style={{ padding: '8px 14px', background: 'transparent', border: '1px solid #1e2433', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontSize: '13px' }}
-                    >
-                        ← Dashboard
-                    </button>
-                </div>
+        <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--sans)', paddingBottom: '100px' }}>
+            <style>{`
+                .profile-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+                @media (min-width: 960px) {
+                    .profile-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+                }
+            `}</style>
 
-                {/* Текущие данные */}
-                <div style={card}>
-                    <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '4px' }}>Логин</p>
-                    <p style={{ color: '#fff', fontSize: '14px', marginBottom: '14px' }}>
-                        {profile?.login || '—'}
-                    </p>
-                    <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '4px' }}>Email</p>
-                    <p style={{ color: hasRealEmail ? '#10b981' : '#f59e0b', fontSize: '14px' }}>
-                        {hasRealEmail ? `${authUser.email} ✓` : 'не привязан'}
-                    </p>
-                    {pendingEmail && (
-                        <p style={{ color: '#f59e0b', fontSize: '12px', marginTop: '8px' }}>
-                            ⏳ Ожидает подтверждения: {pendingEmail}
-                        </p>
-                    )}
-                </div>
+            <AppHeader initial={initial} maxWidth={MAX_WIDTH} variant="logout" />
 
-                {/* Смена логина */}
-                <div style={card}>
-                    <h2 style={{ color: '#fff', fontSize: '15px', marginBottom: '14px' }}>Сменить логин</h2>
-                    <label style={labelStyle}>Новый логин (латиница, цифры, . _ -, от 3 до 30 символов)</label>
-                    <input
-                        type="text"
-                        value={newLogin}
-                        onChange={(e) => setNewLogin(e.target.value)}
-                        style={inputStyle}
-                    />
-                    <button onClick={handleLoginChange} disabled={loginBusy} style={btnStyle(loginBusy)}>
-                        {loginBusy ? 'Сохраняю...' : 'Сохранить логин'}
-                    </button>
-                    <Msg m={loginMsg} />
-                </div>
+            <main style={{ maxWidth: `${MAX_WIDTH}px`, margin: '0 auto', padding: '32px 20px 0' }}>
+                <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '13px', marginBottom: '14px' }}>
+                    Личный кабинет
+                </p>
+                <h1
+                    style={{
+                        fontFamily: 'var(--serif)',
+                        fontWeight: '800',
+                        fontSize: 'clamp(40px, 9vw, 58px)',
+                        lineHeight: '1.04',
+                        letterSpacing: '-1px',
+                        color: 'var(--text)',
+                        marginBottom: '14px',
+                    }}
+                >
+                    Профиль
+                </h1>
+                <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.6', marginBottom: '30px' }}>
+                    Данные аккаунта и настройки входа.
+                </p>
 
-                {/* Смена пароля */}
-                <div style={card}>
-                    <h2 style={{ color: '#fff', fontSize: '15px', marginBottom: '14px' }}>Сменить пароль</h2>
-                    <label style={labelStyle}>Текущий пароль</label>
-                    <input
-                        type="password"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        style={inputStyle}
-                    />
-                    <label style={labelStyle}>Новый пароль (8+ символов, заглавная буква, цифра)</label>
-                    <input
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        style={inputStyle}
-                    />
-                    <label style={labelStyle}>Повторите новый пароль</label>
-                    <input
-                        type="password"
-                        value={repeatPassword}
-                        onChange={(e) => setRepeatPassword(e.target.value)}
-                        style={inputStyle}
-                    />
-                    <button onClick={handlePasswordChange} disabled={passBusy} style={btnStyle(passBusy)}>
-                        {passBusy ? 'Сохраняю...' : 'Сменить пароль'}
-                    </button>
-                    <Msg m={passMsg} />
-                </div>
+                <div className="profile-grid">
+                    {/* Левая колонка: кто вы и логин */}
+                    <div>
+                        <div style={cardStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '18px', padding: '24px' }}>
+                                <div
+                                    style={{
+                                        flex: 'none',
+                                        width: '72px',
+                                        height: '72px',
+                                        borderRadius: '50%',
+                                        background: '#1b3d6e',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontFamily: 'var(--serif)',
+                                        fontWeight: '700',
+                                        fontSize: '30px',
+                                        color: 'var(--text)',
+                                    }}
+                                >
+                                    {initial}
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <p
+                                        style={{
+                                            fontFamily: 'var(--serif)',
+                                            fontWeight: '700',
+                                            fontSize: '22px',
+                                            color: 'var(--text)',
+                                            wordBreak: 'break-word',
+                                        }}
+                                    >
+                                        {displayName}
+                                    </p>
+                                    <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '2px' }}>
+                                        {ROLE_LABEL[profile?.role] || 'Студент'}
+                                    </p>
+                                </div>
+                            </div>
 
-                {/* Привязка email */}
-                <div style={card}>
-                    <h2 style={{ color: '#fff', fontSize: '15px', marginBottom: '6px' }}>
-                        {hasRealEmail ? 'Сменить email' : 'Привязать email'}
-                    </h2>
-                    <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '14px', lineHeight: '1.6' }}>
-                        Email нужен, чтобы восстановить пароль, если вы его забудете. Мы отправим письмо со ссылкой подтверждения.
-                    </p>
-                    <input
-                        type="email"
-                        placeholder="you@example.com"
-                        value={newEmail}
-                        onChange={(e) => setNewEmail(e.target.value)}
-                        style={inputStyle}
-                    />
-                    <button onClick={handleEmailLink} disabled={emailBusy} style={btnStyle(emailBusy)}>
-                        {emailBusy ? 'Отправляю...' : 'Отправить письмо подтверждения'}
-                    </button>
-                    <Msg m={emailMsg} />
+                            <div style={{ borderTop: '1px solid var(--border-soft)', padding: '24px' }}>
+                                <label style={labelStyle}>Логин</label>
+                                <input
+                                    type="text"
+                                    value={newLogin}
+                                    onChange={(e) => setNewLogin(e.target.value)}
+                                    autoComplete="username"
+                                    style={inputStyle}
+                                />
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '10px', lineHeight: '1.5' }}>
+                                    Логин для входа на платформу: латиница, цифры, . _ -, от 3 до 30 символов.
+                                </p>
+                                <Msg m={loginMsg} />
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handleLoginChange}
+                            disabled={loginBusy || unchanged || !newLogin.trim()}
+                            style={{ ...solidBtn(loginBusy || unchanged || !newLogin.trim()), marginTop: '18px' }}
+                        >
+                            {loginBusy ? 'Сохраняю...' : 'Сохранить изменения'}
+                        </button>
+                    </div>
+
+                    {/* Правая колонка: безопасность */}
+                    <div style={cardStyle}>
+                        <Row
+                            first
+                            title="Пароль и безопасность"
+                            hint="Сменить пароль"
+                            open={open === 'password'}
+                            onToggle={() => toggle('password')}
+                        >
+                            <label style={labelStyle}>Текущий пароль</label>
+                            <input
+                                type="password"
+                                autoComplete="current-password"
+                                value={currentPassword}
+                                onChange={(e) => setCurrentPassword(e.target.value)}
+                                style={{ ...inputStyle, marginBottom: '16px' }}
+                            />
+                            <label style={labelStyle}>
+                                Новый пароль{' '}
+                                <span style={{ color: 'var(--text-muted)', fontWeight: '500' }}>
+                                    (8+ символов, заглавная буква, цифра)
+                                </span>
+                            </label>
+                            <input
+                                type="password"
+                                autoComplete="new-password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                style={{ ...inputStyle, marginBottom: '16px' }}
+                            />
+                            <label style={labelStyle}>Повторите новый пароль</label>
+                            <input
+                                type="password"
+                                autoComplete="new-password"
+                                value={repeatPassword}
+                                onChange={(e) => setRepeatPassword(e.target.value)}
+                                style={inputStyle}
+                            />
+                            <button
+                                onClick={handlePasswordChange}
+                                disabled={passBusy}
+                                style={{ ...solidBtn(passBusy), marginTop: '20px' }}
+                            >
+                                {passBusy ? 'Сохраняю...' : 'Сменить пароль'}
+                            </button>
+                            <Msg m={passMsg} />
+                        </Row>
+
+                        <Row
+                            title="Email для восстановления"
+                            hint={hasRealEmail ? authUser.email : 'Не привязан'}
+                            open={open === 'email'}
+                            onToggle={() => toggle('email')}
+                        >
+                            <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+                                Email нужен, чтобы восстановить пароль, если вы его забудете. Мы отправим письмо со ссылкой подтверждения.
+                            </p>
+                            {pendingEmail && (
+                                <p style={{ color: '#f5b84a', fontSize: '13.5px', marginBottom: '14px' }}>
+                                    ⏳ Ожидает подтверждения: {pendingEmail}
+                                </p>
+                            )}
+                            <label style={labelStyle}>{hasRealEmail ? 'Новый email' : 'Ваш email'}</label>
+                            <input
+                                type="email"
+                                placeholder="you@example.com"
+                                autoComplete="email"
+                                value={newEmail}
+                                onChange={(e) => setNewEmail(e.target.value)}
+                                style={inputStyle}
+                            />
+                            <button
+                                onClick={handleEmailLink}
+                                disabled={emailBusy}
+                                style={{ ...solidBtn(emailBusy), marginTop: '20px' }}
+                            >
+                                {emailBusy ? 'Отправляю...' : 'Отправить письмо подтверждения'}
+                            </button>
+                            <Msg m={emailMsg} />
+                        </Row>
+                    </div>
                 </div>
-            </div>
+            </main>
+
+            <BottomNav />
         </div>
     );
 }
