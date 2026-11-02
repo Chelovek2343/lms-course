@@ -14,6 +14,7 @@ const ACTIONS = [
     { title: 'Пользователи', desc: 'Роли, доступ и удаление аккаунтов', href: '/admin/users', icon: '👥' },
     { title: 'Создать аккаунт', desc: 'Логин и пароль для нового студента', href: '/admin/users/create', icon: '➕' },
         { title: 'Документы студентов', desc: 'Проверка документов и список нужных', href: '/admin/documents', icon: '📄' },
+        { title: 'Доступ к курсам', desc: 'Кому какие курсы открыты', href: '/admin/access', icon: '🔑' },
 ];
 
 const roleBadge = (role) => {
