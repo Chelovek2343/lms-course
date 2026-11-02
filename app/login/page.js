@@ -314,6 +314,12 @@ export default function LoginPage() {
                 Не помню пароль
               </button>
             </div>
+                              <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '22px' }}>
+              Нет аккаунта?{' '}
+              <a href="/register" style={{ color: 'var(--accent-soft)', fontWeight: '700', textDecoration: 'none' }}>
+                Зарегистрироваться
+              </a>
+            </p>
           </>
         )}
       </div>
