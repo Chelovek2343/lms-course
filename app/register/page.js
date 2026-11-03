@@ -11,6 +11,8 @@ import { passwordError, isDisposableEmail, friendlyAuthError } from '../../lib/a
 import { TERMS_VERSION, TERMS_DATE, PRIVACY_VERSION, PRIVACY_DATE } from '../../lib/legal-version'
 import { TERMS_HTML, PRIVACY_HTML } from '../../lib/legal'
 
+const INTERNAL_DOMAIN = '@lms.internal'
+
 const cardStyle = {
   background: 'var(--card-bg)',
   border: '1px solid var(--border)',
@@ -62,14 +64,37 @@ export default function RegisterPage() {
   const [sentTo, setSentTo] = useState('')
   const [resendLeft, setResendLeft] = useState(0)
   const [resendMsg, setResendMsg] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
   const router = useRouter()
   const supabase = createClient()
 
-  // уже вошедшего человека на регистрацию не пускаем
+  // Если человек уже вошёл, не выгоняем его со страницы,
+  // а только сообщаем об этом и даём выбор.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) router.replace('/courses')
-    })
+    let cancelled = false
+
+    const check = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user || cancelled) return
+
+      const { data: p } = await supabase
+        .from('profiles')
+        .select('login, first_name, last_name, email')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (cancelled) return
+
+      const realEmail = p?.email && !p.email.endsWith(INTERNAL_DOMAIN) ? p.email : ''
+      const fullName = [p?.first_name, p?.last_name].filter(Boolean).join(' ')
+      setCurrentUser({ name: fullName || p?.login || realEmail || 'другой аккаунт' })
+    }
+
+    check()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -108,6 +133,12 @@ export default function RegisterPage() {
 
     const clean = normalizePersonal(values)
     setBusy(true)
+
+    // выходим из прежнего аккаунта, чтобы новый создавался с чистого листа
+    if (currentUser) {
+      await supabase.auth.signOut()
+      setCurrentUser(null)
+    }
 
     const { data, error: authError } = await supabase.auth.signUp({
       email: clean.contactEmail,
@@ -278,6 +309,44 @@ export default function RegisterPage() {
       {header}
 
       <main style={{ maxWidth: '640px', margin: '0 auto', padding: '32px 20px 60px' }}>
+        {currentUser && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '14px',
+              flexWrap: 'wrap',
+              padding: '14px 18px',
+              marginBottom: '24px',
+              borderRadius: '18px',
+              background: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.35)',
+            }}
+          >
+            <p style={{ color: 'var(--text)', fontSize: '14px', lineHeight: '1.5', flex: '1 1 260px' }}>
+              Вы уже вошли как <b>{currentUser.name}</b>. Если зарегистрируете новый аккаунт, вы выйдете из этого.
+            </p>
+            <button
+              onClick={() => router.push('/dashboard')}
+              style={{
+                padding: '10px 18px',
+                borderRadius: '999px',
+                border: '1.5px solid rgba(245,158,11,0.6)',
+                background: 'transparent',
+                color: '#f5b84a',
+                fontSize: '13.5px',
+                fontWeight: '700',
+                fontFamily: 'var(--sans)',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              Вернуться в кабинет
+            </button>
+          </div>
+        )}
+
         <p style={{ color: 'var(--accent-soft)', fontWeight: '600', fontSize: '13px', marginBottom: '14px' }}>
           Регистрация
         </p>
